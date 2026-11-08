@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mars 3D Viewer</title>
-    <!-- Import the model-viewer component -->
+    <title>Interactive 3D Mars Viewer & Landmarks</title>
+    <!-- Import Google's model-viewer component -->
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
     <style>
         body, html {
@@ -12,21 +12,147 @@
             width: 100%;
             height: 100%;
             background-color: #0b0b0b;
+            font-family: sans-serif;
             overflow: hidden;
         }
         model-viewer {
             width: 100%;
             height: 100%;
         }
+        /* UI Control Panel Overlay */
+        #control-panel {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(25, 25, 35, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            z-index: 10;
+        }
+        input, button, select {
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
+            font-size: 14px;
+        }
+        button {
+            background: #d9534f;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #c9302c;
+        }
+        /* Landmark Pin Styling */
+        .landmark-pin {
+            background: rgba(255, 69, 0, 0.85);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            cursor: pointer;
+            white-space: nowrap;
+            border: 1px solid #fff;
+        }
+        .landmark-pin:hover {
+            background: #ff4500;
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
-    <!-- Loads your local GLB model file placed in the same folder -->
+
+    <!-- UI Panel (Replaces the Java Swing Top/Bottom panels) -->
+    <div id="control-panel">
+        <input type="text" id="siteName" placeholder="Site Name" value="New Base">
+        <input type="text" id="siteOrbit" placeholder="X Y Z (e.g. 0m 0.1m 0.2m)" value="0m 0.15m 0.1m" style="width: 180px;">
+        <button onclick="addNewLandmark()">Add Pin</button>
+        <select id="deleteSelect"></select>
+        <button onclick="deleteLandmark()" style="background: #333;">Delete</button>
+    </div>
+
+    <!-- 3D Model Viewer -->
     <model-viewer 
+        id="marsViewer"
         src="24881_Mars_1_6792.glb" 
         alt="NASA Mars 3D Model" 
         auto-rotate 
         camera-controls>
+        
+        <!-- Pre-loaded Default NASA Landmarks -->
+        <button class="landmark-pin" slot="hotspot-olympus" data-position="0m 0.18m 0.08m" data-normal="0m 1m 0m">
+            Olympus Mons
+        </button>
+        <button class="landmark-pin" slot="hotspot-jezero" data-position="0.12m 0.05m -0.1m" data-normal="0m 1m 0m">
+            Jezero Crater
+        </button>
+        <button class="landmark-pin" slot="hotspot-gale" data-position="-0.08m -0.02m 0.12m" data-normal="0m 1m 0m">
+            Gale Crater
+        </button>
     </model-viewer>
+
+    <script>
+        const viewer = document.getElementById('marsViewer');
+        const deleteSelect = document.getElementById('deleteSelect');
+
+        // Populate delete dropdown on load
+        window.addEventListener('DOMContentLoaded', () => {
+            updateDropdown();
+        });
+
+        function addNewLandmark() {
+            const name = document.getElementById('siteName').value.trim();
+            const position = document.getElementById('siteOrbit').value.trim();
+            
+            if (!name) {
+                alert("Please enter a valid site name.");
+                return;
+            }
+
+            const slotName = 'hotspot-' + Date.now();
+
+            // Create the HTML button element for the 3D pin
+            const pinButton = document.createElement('button');
+            pinButton.className = 'landmark-pin';
+            pinButton.slot = slotName;
+            pinButton.setAttribute('data-position', position);
+            pinButton.setAttribute('data-normal', '0m 1m 0m');
+            pinButton.innerText = name;
+
+            // Append pin to model-viewer
+            viewer.appendChild(pinButton);
+            updateDropdown();
+            document.getElementById('siteName').value = "";
+        }
+
+        function updateDropdown() {
+            deleteSelect.innerHTML = "";
+            const hotspots = viewer.querySelectorAll('.landmark-pin');
+            hotspots.forEach(pin => {
+                const opt = document.createElement('option');
+                opt.value = pin.slot;
+                opt.innerText = pin.innerText;
+                deleteSelect.appendChild(opt);
+            });
+        }
+
+        function deleteLandmark() {
+            const selectedSlot = deleteSelect.value;
+            const targetPin = viewer.querySelector(`[slot="${selectedSlot}"]`);
+            if (targetPin) {
+                targetPin.remove();
+                updateDropdown();
+            }
+        }
+    </script>
 </body>
 </html>
