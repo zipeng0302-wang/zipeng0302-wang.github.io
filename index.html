@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Interactive 3D Mars Map & Landmark Manager</title>
-    <!-- Import Google's model-viewer component -->
+    <title>Mars 3D Viewer</title>
+    <!-- Import the model-viewer component -->
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
     <style>
         body, html {
@@ -11,256 +11,22 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #0b0b0f;
-            font-family: sans-serif;
+            background-color: #0b0b0b;
             overflow: hidden;
-            color: white;
         }
-
-        /* Full screen model viewer canvas */
         model-viewer {
-            width: 100vw;
-            height: 100vh;
-        }
-
-        /* Top Panel - Add Landmark */
-        #top-panel {
-            position: absolute;
-            top: 0;
-            left: 0;
             width: 100%;
-            background-color: #191923;
-            padding: 8px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            box-sizing: border-box;
-            z-index: 10;
-            border-bottom: 1px solid #222;
-        }
-
-        /* Bottom Panel - Management & Resources */
-        #bottom-panel {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: #141419;
-            padding: 10px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            box-sizing: border-box;
-            z-index: 10;
-            border-top: 1px solid #222;
-        }
-
-        input, select, button {
-            background-color: #ffffff;
-            color: #000;
-            border: 1px solid #ccc;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-
-        input[type="text"] {
-            background-color: #ffffff;
-        }
-
-        button {
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        select {
-            width: 210px;
-        }
-
-        label {
-            font-size: 13px;
-        }
-
-        /* 3D Landmark Pin Styling matching screenshot */
-        .landmark-pin {
-            background: rgba(255, 140, 0, 0.9);
-            color: white;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            border: 1px solid #ffffff;
-            white-space: nowrap;
-        }
-
-        .landmark-pin::before {
-            content: '';
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background-color: yellow;
-            border-radius: 50%;
-        }
-
-        /* Modal Overlay for NASA Resources */
-        #resources-modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7);
-            z-index: 100;
-            justify-content: center;
-            align-items: center;
-        }
-        #modal-content {
-            background: #f4f4f4;
-            color: #333;
-            padding: 20px;
-            width: 550px;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            height: 100%;
         }
     </style>
 </head>
 <body>
-
-    <!-- TOP PANEL -->
-    <div id="top-panel">
-        <label>Name:</label>
-        <input type="text" id="nameField" value="New Site" style="width: 110px;">
-        <label>Lat (-90 to 90):</label>
-        <input type="text" id="latField" value="0.0" style="width: 50px;">
-        <label>Lon (0 to 360):</label>
-        <input type="text" id="lonField" value="0.0" style="width: 50px;">
-        <button id="addBtn" onclick="addLandmark()">Add Landmark</button>
-    </div>
-
-    <!-- 3D MARS VIEWER -->
+    <!-- Loads your local GLB model file placed in the same folder -->
     <model-viewer 
-        id="marsViewer"
         src="24881_Mars_1_6792.glb" 
-        alt="Mars 3D Model" 
-        camera-controls 
-        auto-rotate
-        interaction-prompt="none">
-        
-        <!-- Default Preloaded Landmarks -->
-        <button class="landmark-pin" slot="hotspot-olympus" data-position="0.14m 0.12m 0.12m" data-normal="0m 1m 0m">Olympus Mons</button>
-        <button class="landmark-pin" slot="hotspot-jezero" data-position="0.16m 0.05m -0.05m" data-normal="0m 1m 0m">Jezero Crater (Perseverance)</button>
-        <button class="landmark-pin" slot="hotspot-gale" data-position="-0.02m -0.04m 0.18m" data-normal="0m 1m 0m">Gale Crater (Curiosity)</button>
+        alt="NASA Mars 3D Model" 
+        auto-rotate 
+        camera-controls>
     </model-viewer>
-
-    <!-- BOTTOM PANEL -->
-    <div id="bottom-panel">
-        <label style="color: lightgray;">Manage:</label>
-        <select id="deleteComboBox"></select>
-        <button id="deleteBtn" onclick="deleteLandmark()">Delete Selected</button>
-        <button id="resourcesBtn" onclick="openResources()">NASA Data & Resources</button>
-        <button id="resetBtn" onclick="resetView()">Reset View</button>
-    </div>
-
-    <!-- NASA RESOURCES POPUP MODAL -->
-    <div id="resources-modal">
-        <div id="modal-content">
-            <h2>Mars Mapping & Research Sources</h2>
-            <p>Integrated research datasets for the NASA Space Apps Challenge:</p>
-            <ul>
-                <li><b>USGS-NASA Planetary Geologic Mapping Program:</b> Morphologic, topographic, and stratigraphic datasets[cite: 2].</li>
-                <li><b>JPL Mars Trek:</b> Interactive mapping and visualization portal[cite: 2].</li>
-                <li><b>AI4Mars Dataset:</b> Terrain-aware autonomous driving data for rovers[cite: 2].</li>
-                <li><b>MGS TES Thermal Inertia:</b> Thermal Emission Spectrometer data[cite: 2].</li>
-            </ul>
-            <div style="text-align: right; margin-top: 15px;">
-                <button onclick="closeResources()" style="background:#ddd; padding: 5px 15px;">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const viewer = document.getElementById('marsViewer');
-        const deleteComboBox = document.getElementById('deleteComboBox');
-
-        // Update dropdown list options on startup
-        window.addEventListener('DOMContentLoaded', updateDropdown);
-
-        function addLandmark() {
-            const name = document.getElementById('nameField').value.trim();
-            const lat = parseFloat(document.getElementById('latField').value);
-            const lon = parseFloat(document.getElementById('lonField').value);
-
-            if (!name) {
-                alert("Please enter a valid landmark name.");
-                return;
-            }
-            if (isNaN(lat) || lat < -90 || lat > 90) {
-                alert("Latitude must be between -90 and 90 degrees.");
-                return;
-            }
-
-            // Convert Latitude & Longitude spherical coordinates to approximate 3D model vector offsets
-            const phi = (90 - lat) * (Math.PI / 180);
-            const theta = lon * (Math.PI / 180);
-            const r = 0.18; // Radius scale factor matching viewer size
-
-            const x = (r * Math.sin(phi) * Math.cos(theta)).toFixed(3) + 'm';
-            const y = (r * Math.cos(phi)).toFixed(3) + 'm';
-            const z = (r * Math.sin(phi) * Math.sin(theta)).toFixed(3) + 'm';
-
-            const slotName = 'hotspot-' + Date.now();
-
-            const button = document.createElement('button');
-            button.className = 'landmark-pin';
-            button.slot = slotName;
-            button.setAttribute('data-position', `${x} ${y} ${z}`);
-            button.setAttribute('data-normal', '0m 1m 0m');
-            button.innerText = `${name} (${lat}°, ${lon}°)`;
-
-            viewer.appendChild(button);
-            updateDropdown();
-            document.getElementById('nameField').value = "";
-        }
-
-        function updateDropdown() {
-            deleteComboBox.innerHTML = "";
-            const pins = viewer.querySelectorAll('.landmark-pin');
-            pins.forEach(pin => {
-                const opt = document.createElement('option');
-                opt.value = pin.slot;
-                opt.innerText = pin.innerText;
-                deleteComboBox.appendChild(opt);
-            });
-        }
-
-        function deleteLandmark() {
-            const slot = deleteComboBox.value;
-            const target = viewer.querySelector(`[slot="${slot}"]`);
-            if (target) {
-                target.remove();
-                updateDropdown();
-            } else {
-                alert("No landmark selected to delete.");
-            }
-        }
-
-        function resetView() {
-            viewer.cameraOrbit = '0deg 75deg 105%';
-            viewer.fieldOfView = '30deg';
-        }
-
-        function openResources() {
-            document.getElementById('resources-modal').style.display = 'flex';
-        }
-
-        function closeResources() {
-            document.getElementById('resources-modal').style.display = 'none';
-        }
-    </script>
 </body>
 </html>
