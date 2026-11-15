@@ -2,31 +2,3526 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mars 3D Viewer</title>
-    <!-- Import the model-viewer component -->
+    <title>ARES-HUD // NASA Mars EVA Mission Planner, 3D Sandbox & WASD Rover Simulator</title>
+    <!-- Google model-viewer for Global 3D Mars -->
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
+        :root {
+            --bg-dark: #07090e;
+            --panel-bg: rgba(10, 15, 24, 0.90);
+            --panel-border: rgba(0, 229, 255, 0.30);
+            --cyan: #00e5ff;
+            --amber: #ff9100;
+            --red: #ff2a55;
+            --green: #00e676;
+            --purple: #d500f9;
+            --text-main: #e2f1ff;
+            --text-muted: #7b93ad;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #0b0b0b;
+            background-color: var(--bg-dark);
+            font-family: 'Segoe UI', 'Roboto', 'SF Pro Display', monospace, sans-serif;
             overflow: hidden;
+            color: var(--text-main);
         }
+
+        /* ================= TOP COMMAND BAR ================= */
+        #top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 54px;
+            background: linear-gradient(90deg, rgba(8,12,20,0.96) 0%, rgba(16,25,40,0.94) 50%, rgba(8,12,20,0.96) 100%);
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 16px;
+            z-index: 60;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        }
+
+        .brand-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nasa-badge {
+            background: linear-gradient(135deg, #0b3d91, #fc3d21);
+            color: white;
+            font-weight: 900;
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.4);
+        }
+
+        .system-title {
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.8px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+        }
+
+        .system-sub {
+            font-size: 10.5px;
+            color: var(--cyan);
+            letter-spacing: 0.4px;
+        }
+
+        #global-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mode-btn-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mode-switch-btn {
+            background: rgba(16, 28, 46, 0.9);
+            color: #c8e6ff;
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            padding: 7px 13px;
+            border-radius: 6px;
+            font-size: 11.5px;
+            font-weight: 800;
+            letter-spacing: 0.6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+
+        .mode-switch-btn:hover {
+            transform: translateY(-1px);
+            border-color: var(--cyan);
+            color: #fff;
+        }
+
+        .mode-switch-btn.active-mode {
+            background: linear-gradient(135deg, #007799 0%, #00e5ff 100%);
+            color: #031018;
+            border-color: #ffffff;
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.55);
+        }
+
+        .mode-switch-btn.drive-cta {
+            background: linear-gradient(135deg, #ff6d00 0%, #ff2a55 100%);
+            color: #fff;
+            border-color: #ffaa00;
+            box-shadow: 0 0 15px rgba(255, 109, 0, 0.45);
+        }
+
+        .mode-switch-btn.drive-cta.active-mode {
+            background: linear-gradient(135deg, #00e676 0%, #00b0ff 100%);
+            color: #03120a;
+            border-color: #fff;
+            box-shadow: 0 0 18px rgba(0, 230, 118, 0.7);
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 8px #fff;
+            animation: pulse 1.4s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.7; }
+        }
+
+        /* ================= INPUTS & BUTTONS ================= */
+        input, select, .hud-btn {
+            background: rgba(16, 26, 42, 0.9);
+            color: var(--text-main);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            padding: 5px 9px;
+            border-radius: 4px;
+            font-size: 11.5px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--cyan);
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+        }
+
+        .hud-btn {
+            cursor: pointer;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        .hud-btn:hover {
+            background: rgba(0, 229, 255, 0.2);
+            border-color: var(--cyan);
+            color: #fff;
+        }
+
+        .hud-btn.active {
+            background: var(--cyan);
+            color: #031017;
+            border-color: #fff;
+            box-shadow: 0 0 12px rgba(0, 229, 255, 0.5);
+        }
+
+        .hud-btn.amber.active {
+            background: var(--amber);
+            color: #1a0900;
+            border-color: #ffd180;
+            box-shadow: 0 0 12px rgba(255, 145, 0, 0.6);
+        }
+
+        /* ================= VIEW 1: GLOBAL 3D MARS ================= */
+        #global-view {
+            position: absolute;
+            top: 54px;
+            left: 0;
+            width: 100vw;
+            height: calc(100vh - 54px);
+            display: block;
+        }
+
         model-viewer {
             width: 100%;
+            height: calc(100% - 48px);
+            background: radial-gradient(circle at center, #151928 0%, #05060a 100%);
+        }
+
+        .landmark-pin {
+            background: rgba(10, 16, 28, 0.95);
+            color: #fff;
+            padding: 5px 11px;
+            border-radius: 14px;
+            font-size: 11.5px;
+            font-weight: 700;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.9);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1.5px solid var(--amber);
+            white-space: nowrap;
+        }
+
+        .landmark-pin:hover {
+            background: rgba(255, 145, 0, 0.92);
+            color: #000;
+        }
+
+        .landmark-pin::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--amber);
+            border-radius: 50%;
+            box-shadow: 0 0 6px var(--amber);
+        }
+
+        .landmark-pin.gale-highlight {
+            border-color: var(--cyan);
+            background: rgba(0, 60, 90, 0.92);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.6);
+        }
+
+        .landmark-pin.gale-highlight::before {
+            background-color: var(--cyan);
+            box-shadow: 0 0 8px var(--cyan);
+        }
+
+        #bottom-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 48px;
+            background-color: rgba(10, 14, 22, 0.95);
+            padding: 0 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 14px;
+            border-top: 1px solid var(--panel-border);
+            z-index: 10;
+        }
+
+        /* ================= VIEW 2: GALE CRATER 70x70KM TACTICAL HUD ================= */
+        #gale-view {
+            position: absolute;
+            top: 54px;
+            left: 0;
+            width: 100vw;
+            height: calc(100vh - 54px);
+            display: none;
+            overflow: hidden;
+            background: #06080d;
+        }
+
+        #gale-canvas-container {
+            width: 100%;
             height: 100%;
+            position: relative;
+        }
+
+        .tactical-panel {
+            position: absolute;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            padding: 11px;
+            z-index: 20;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.75);
+        }
+
+        #left-hud {
+            top: 12px;
+            left: 12px;
+            width: 295px;
+            max-height: calc(100% - 24px);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #right-hud {
+            top: 12px;
+            right: 12px;
+            width: 325px;
+            max-height: calc(100% - 24px);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .panel-header {
+            font-size: 10.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.1px;
+            color: var(--cyan);
+            border-bottom: 1px solid rgba(0, 229, 255, 0.25);
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+
+        .btn-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .layer-btn {
+            text-align: left;
+            padding: 6px 9px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+        }
+
+        .layer-tag {
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.1);
+            color: var(--text-muted);
+        }
+
+        .layer-btn.active .layer-tag {
+            background: rgba(0,0,0,0.28);
+            color: #000;
+            font-weight: 900;
+        }
+
+        #layer-citation-box {
+            margin-top: 6px;
+            padding: 7px 9px;
+            background: rgba(0, 229, 255, 0.06);
+            border-left: 3px solid var(--cyan);
+            border-radius: 3px;
+            font-size: 10.5px;
+            line-height: 1.35;
+            color: #bbd6f2;
+        }
+
+        #danger-box {
+            padding: 9px;
+            border-radius: 6px;
+            border: 1px solid var(--green);
+            background: rgba(0, 230, 118, 0.08);
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .danger-title {
+            font-size: 9.5px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .danger-score {
+            font-size: 22px;
+            font-weight: 900;
+            margin: 2px 0;
+            letter-spacing: 1px;
+        }
+
+        .danger-reason {
+            font-size: 10.5px;
+            line-height: 1.35;
+        }
+
+        .stat-row {
+            margin-bottom: 6px;
+        }
+
+        .stat-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+
+        .progress-bg {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--cyan);
+            width: 50%;
+            transition: width 0.3s ease, background 0.3s ease;
+        }
+
+        #elevation-canvas {
+            width: 100%;
+            height: 72px;
+            background: rgba(5, 10, 18, 0.85);
+            border: 1px solid rgba(0, 229, 255, 0.25);
+            border-radius: 4px;
+        }
+
+        #tactical-banner {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 16, 26, 0.92);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            padding: 7px 16px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            color: var(--text-main);
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+        }
+
+        #hover-readout {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(8, 13, 22, 0.92);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: monospace;
+            z-index: 20;
+            pointer-events: none;
+            color: var(--cyan);
+            white-space: nowrap;
+        }
+
+        .legend-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .gradient-strip {
+            flex: 1;
+            height: 6px;
+            margin: 0 8px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #00e676, #ffea00, #ff9100, #ff1744);
+        }
+
+        .waypoint-chip {
+            font-size: 10.5px;
+            padding: 4px 7px;
+            background: rgba(255,255,255,0.05);
+            border-left: 3px solid var(--cyan);
+            border-radius: 2px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        /* ================= VIEW 3: 3D THIRD-PERSON ASTRONAUT ROVER SIMULATOR ================= */
+        #drive-view {
+            position: absolute;
+            top: 54px;
+            left: 0;
+            width: 100vw;
+            height: calc(100vh - 54px);
+            display: none;
+            overflow: hidden;
+            background: #05070c;
+        }
+
+        #drive-canvas-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* 2D Fullscreen / Modal Route Planning Overlay */
+        #map-planner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 9, 16, 0.92);
+            backdrop-filter: blur(10px);
+            z-index: 45;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .planner-card {
+            background: #0c1320;
+            border: 1.5px solid var(--cyan);
+            border-radius: 10px;
+            width: 960px;
+            max-width: 96vw;
+            display: grid;
+            grid-template-columns: 520px 1fr;
+            gap: 18px;
+            padding: 18px;
+            box-shadow: 0 12px 45px rgba(0, 0, 0, 0.9);
+        }
+
+        #planner-2d-canvas {
+            width: 500px;
+            height: 500px;
+            border: 1.5px solid rgba(0, 229, 255, 0.45);
+            border-radius: 6px;
+            cursor: crosshair;
+            background: #090d16;
+        }
+
+        .coord-box {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(0, 229, 255, 0.25);
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .coord-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        /* Left & Right Side Danger & Reason HUDs in 3D Drive Mode */
+        #drive-left-hud {
+            position: absolute;
+            top: 80px;
+            left: 16px;
+            width: 280px;
+            background: rgba(8, 13, 22, 0.86);
+            border: 1.5px solid var(--green);
+            border-left: 5px solid var(--green);
+            border-radius: 8px;
+            padding: 14px;
+            z-index: 30;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.75);
+            transition: border-color 0.25s;
+        }
+
+        #drive-right-hud {
+            position: absolute;
+            top: 230px;
+            right: 16px;
+            width: 295px;
+            background: rgba(8, 13, 22, 0.86);
+            border: 1.5px solid var(--panel-border);
+            border-right: 5px solid var(--cyan);
+            border-radius: 8px;
+            padding: 14px;
+            z-index: 30;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.75);
+        }
+
+        /* Top-Right Clickable 2D Minimap Radar */
+        #minimap-widget {
+            position: absolute;
+            top: 14px;
+            right: 16px;
+            width: 205px;
+            background: rgba(8, 14, 24, 0.92);
+            border: 1.5px solid var(--cyan);
+            border-radius: 8px;
+            padding: 7px;
+            z-index: 35;
+            cursor: pointer;
+            box-shadow: 0 6px 22px rgba(0,0,0,0.8);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        #minimap-widget:hover {
+            transform: scale(1.03);
+            box-shadow: 0 0 18px rgba(0, 229, 255, 0.65);
+        }
+
+        #minimap-canvas {
+            width: 189px;
+            height: 165px;
+            border-radius: 4px;
+            display: block;
+            background: #070b12;
+        }
+
+        .minimap-caption {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--cyan);
+            text-align: center;
+            margin-top: 4px;
+            letter-spacing: 0.6px;
+        }
+
+        /* Top Center Compass & Target Distance Bar */
+        #drive-compass-bar {
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(8, 13, 22, 0.90);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            padding: 8px 22px;
+            border-radius: 22px;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.8px;
+            color: #fff;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.7);
+        }
+
+        /* Bottom WASD Controls & Speedometer */
+        #drive-bottom-hud {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(8, 14, 24, 0.92);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            border-radius: 12px;
+            padding: 10px 22px;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            gap: 22px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.8);
+        }
+
+        .wasd-cluster {
+            display: grid;
+            grid-template-columns: repeat(3, 32px);
+            grid-template-rows: repeat(2, 30px);
+            gap: 4px;
+        }
+
+        .key-cap {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(0, 229, 255, 0.45);
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 900;
+            color: var(--cyan);
+            transition: all 0.1s;
+        }
+
+        .key-cap.pressed {
+            background: var(--cyan);
+            color: #021017;
+            box-shadow: 0 0 12px var(--cyan);
+            transform: scale(0.95);
+        }
+
+        /* 3D AR Floating Directional Hazard Overlay (13 Sector Markers in front of Rover) */
+        #ar-hazard-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 25;
+            overflow: hidden;
+        }
+
+        .ar-hazard-pin {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(6, 10, 18, 0.82);
+            border: 1.5px solid var(--green);
+            color: #fff;
+            font-family: monospace, sans-serif;
+            text-align: center;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.85);
+            transition: border-color 0.15s, color 0.15s;
+            white-space: nowrap;
+        }
+
+        .ar-hazard-pin::after {
+            content: "";
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 14px;
+            background: currentColor;
+            opacity: 0.75;
+        }
+
+        .ar-pct {
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            line-height: 1.1;
+        }
+
+        .ar-dir {
+            font-size: 9.5px;
+            color: #b8d4f2;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        /* 3D Floating NASA Landmark Name Tags */
+        .ar-landmark-pin {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            padding: 5px 11px;
+            border-radius: 16px;
+            background: rgba(8, 15, 28, 0.90);
+            border: 1.5px solid var(--cyan);
+            color: #ffffff;
+            font-size: 11.5px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.9);
+            pointer-events: none;
+        }
+
+        .ar-landmark-pin .lm-dist {
+            color: var(--cyan);
+            font-family: monospace;
+            font-size: 10.5px;
+            margin-left: 5px;
+        }
+
+        /* Mission Complete Banner Overlay */
+        #mission-complete-banner {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(6, 16, 28, 0.96);
+            border: 2px solid var(--green);
+            border-radius: 12px;
+            padding: 26px 38px;
+            text-align: center;
+            z-index: 55;
+            box-shadow: 0 0 45px rgba(0, 230, 118, 0.55);
+        }
+
+        .ar-cause {
+            font-size: 9.5px;
+            font-weight: 800;
+            margin-top: 2px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.55);
+            letter-spacing: 0.2px;
+            display: none;
+        }
+
+        .reason-item {
+            padding: 7px 9px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.04);
+            border-left: 3px solid var(--cyan);
+            margin-bottom: 7px;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+
+        /* Modal Overlay for NASA Resources */
+        #resources-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.82);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        #modal-content {
+            background: #0d1420;
+            color: var(--text-main);
+            border: 1px solid var(--cyan);
+            padding: 22px;
+            width: 780px;
+            max-height: 86vh;
+            overflow-y: auto;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+        }
+        #modal-content h2 {
+            margin-top: 0;
+            color: var(--cyan);
+            font-size: 18px;
+            border-bottom: 1px solid rgba(0,229,255,0.3);
+            padding-bottom: 8px;
+        }
+        #modal-content h3 {
+            color: var(--amber);
+            font-size: 13.5px;
+            margin: 14px 0 6px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+        .resource-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(0,229,255,0.18);
+            border-radius: 6px;
+            padding: 9px 12px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .resource-card a {
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .resource-card a:hover {
+            text-decoration: underline;
+        }
+        .cite-badge {
+            display: inline-block;
+            background: rgba(255, 145, 0, 0.2);
+            color: var(--amber);
+            border: 1px solid var(--amber);
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            margin-left: 6px;
+            font-weight: 700;
         }
     </style>
 </head>
 <body>
-    <!-- Loads your local GLB model file placed in the same folder -->
-    <model-viewer 
-        src="src/24881_Mars_1_6792.glb"
-        alt="NASA Mars 3D Model" 
-        auto-rotate 
-        camera-controls>
-    </model-viewer>
+
+    <!-- ================= TOP BAR ================= -->
+    <div id="top-bar">
+        <div class="brand-box">
+            <span class="nasa-badge">NASA // EVA</span>
+            <div>
+                <div class="system-title">MARS SURFACE TACTICAL NAVIGATION</div>
+                <div class="system-sub" id="mode-subtitle">MODE: GLOBAL ORBITAL RECONNAISSANCE</div>
+            </div>
+        </div>
+
+        <!-- Global Landmark Controls (Visible in Global View) -->
+        <div id="global-controls">
+            <label style="font-size:11.5px;">Site:</label>
+            <input type="text" id="nameField" value="Boxwork Outcrop" style="width: 105px;">
+            <label style="font-size:11.5px;">Lat:</label>
+            <input type="text" id="latField" value="-5.4" style="width: 42px;">
+            <label style="font-size:11.5px;">Lon:</label>
+            <input type="text" id="lonField" value="137.4" style="width: 42px;">
+            <button class="hud-btn" onclick="addLandmark()">+ Pin</button>
+            <button class="hud-btn amber" onclick="openResources()">📚 Datasets</button>
+        </div>
+
+        <!-- 3-MODE SWITCH BUTTONS -->
+        <div class="mode-btn-group">
+            <button class="mode-switch-btn active-mode" id="btn-mode-global" onclick="switchAppMode('global')">
+                🌍 1. Global 3D Mars
+            </button>
+            <button class="mode-switch-btn" id="btn-mode-gale" onclick="switchAppMode('gale')">
+                🗺️ 2. Gale 70×70km Sandbox
+            </button>
+            <button class="mode-switch-btn drive-cta" id="btn-mode-drive" onclick="switchAppMode('drive')">
+                <span class="pulse-dot"></span>
+                🚀 3. 3D Astronaut Rover Sim (WASD)
+            </button>
+        </div>
+    </div>
+
+    <!-- ================= VIEW 1: GLOBAL 3D MARS ================= -->
+    <div id="global-view">
+        <model-viewer 
+            id="marsViewer"
+            src="src/24881_Mars_1_6792.glb" 
+            alt="Mars 3D Model" 
+            camera-controls 
+            auto-rotate
+            interaction-prompt="none">
+            
+            <!-- Preloaded Landmarks (Baked 3D Surface Coordinates on R=502m Mars Sphere) -->
+            <button class="landmark-pin" slot="hotspot-olympus" data-position="-328.91m 160.53m 342.49m" data-normal="-0.6552m 0.3198m 0.6822m">Olympus Mons (18.65°N, 226.2°E)</button>
+            <button class="landmark-pin" slot="hotspot-jezero" data-position="102.41m 158.30m -465.25m" data-normal="0.2040m 0.3153m -0.9268m">Jezero Crater - Perseverance (18.38°N, 77.58°E)</button>
+            <button class="landmark-pin" slot="hotspot-valles" data-position="250.39m -120.60m 418.70m" data-normal="0.4988m -0.2402m 0.8341m">Valles Marineris (-13.9°S, 300.8°E)</button>
+            <button class="landmark-pin" slot="hotspot-insight" data-position="-357.54m 39.38m -350.11m" data-normal="-0.7122m 0.0785m -0.6974m">Elysium Planitia - InSight (4.5°N, 135.6°E)</button>
+            <button class="landmark-pin gale-highlight" slot="hotspot-gale" data-position="-367.97m -47.24m -338.15m" data-normal="-0.7330m -0.0941m -0.6736m" onclick="switchAppMode('drive')">Gale Crater - Curiosity [CLICK FOR 3D ROVER SIM] (-5.4°S, 137.4°E)</button>
+        </model-viewer>
+
+        <div id="bottom-panel">
+            <label style="color: var(--text-muted); font-size:12px;">Manage Landmarks:</label>
+            <select id="deleteComboBox" style="width: 240px;"></select>
+            <button class="hud-btn" onclick="deleteLandmark()">Delete Selected</button>
+            <button class="hud-btn active" onclick="openResources()">📚 View All 18 Integrated NASA Datasets & Links</button>
+            <button class="hud-btn" onclick="resetView()">Reset Orbit</button>
+        </div>
+    </div>
+
+    <!-- ================= VIEW 2: GALE CRATER 70x70 KM TACTICAL SANDBOX ================= -->
+    <div id="gale-view">
+        <div id="gale-canvas-container"></div>
+        <div id="gale-landmark-labels" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:15; overflow:hidden;"></div>
+
+        <div id="hover-readout">
+            GALE CRATER (-5.4°S, 137.4°E) | 70×70 KM | HOVER TERRAIN FOR USGS / MGS TES / AI4MARS TELEMETRY
+        </div>
+
+        <div class="tactical-panel" id="left-hud">
+            <div>
+                <div class="panel-header">
+                    <span>1. View & Ancient Lake Overlay</span>
+                    <span>3D / PALEO</span>
+                </div>
+                <div class="btn-grid" style="margin-bottom:5px;">
+                    <button class="hud-btn active" id="cam-3d-btn" onclick="setCameraView('3d')">3D Sandbox</button>
+                    <button class="hud-btn" id="cam-top-btn" onclick="setCameraView('top')">2D Tactical Top</button>
+                </div>
+                <button class="hud-btn" id="lake-toggle-btn" style="width:100%;" onclick="togglePaleoLake()">
+                    🌊 Toggle Ancient Gale Paleolake (-3,950m Shoreline)
+                </button>
+            </div>
+
+            <div>
+                <div class="panel-header">
+                    <span>2. Official NASA & USGS Layers</span>
+                    <span>6 DATASETS</span>
+                </div>
+                <div class="btn-stack">
+                    <button class="hud-btn layer-btn active" id="layer-optical" onclick="setLayer('optical')">
+                        <span>AI4Mars Traversability & Slope</span>
+                        <span class="layer-tag">AI4Mars/HiRISE</span>
+                    </button>
+                    <button class="hud-btn layer-btn" id="layer-geology" onclick="setLayer('geology')">
+                        <span>USGS SIM3292 Global Geology</span>
+                        <span class="layer-tag">Tanaka 2014</span>
+                    </button>
+                    <button class="hud-btn layer-btn" id="layer-topo" onclick="setLayer('topo')">
+                        <span>PIA02820 MOLA Topography</span>
+                        <span class="layer-tag">JPL MOLA</span>
+                    </button>
+                    <button class="hud-btn layer-btn" id="layer-thermal" onclick="setLayer('thermal')">
+                        <span>MGS TES Thermal Inertia (3km)</span>
+                        <span class="layer-tag">Putzig 2005</span>
+                    </button>
+                    <button class="hud-btn layer-btn" id="layer-dust" onclick="setLayer('dust')">
+                        <span>MGS TES Dust Cover Index (DCI)</span>
+                        <span class="layer-tag">Ruff 2002</span>
+                    </button>
+                    <button class="hud-btn layer-btn" id="layer-science" onclick="setLayer('science')">
+                        <span>Paleolake & Boxwork Science</span>
+                        <span class="layer-tag">Curiosity/RAD</span>
+                    </button>
+                </div>
+                <div class="legend-bar">
+                    <span id="legend-min">Low / Safe</span>
+                    <div class="gradient-strip" id="legend-gradient"></div>
+                    <span id="legend-max">High / Critical</span>
+                </div>
+                <div id="layer-citation-box">
+                    <b>AI4Mars + JPL Rover Driving:</b> Classifies terrain into bedrock, sand, big rocks, and soil to prevent rover wheel slip and rollover (&gt;16° slope).
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">
+                    <span>3. Meteorology & Thermal Tides</span>
+                    <span>REMS / MEDA</span>
+                </div>
+                <div class="btn-grid" style="margin-bottom: 5px;">
+                    <button class="hud-btn active" id="mob-rover" onclick="setMobility('rover')">Pressurized Rover</button>
+                    <button class="hud-btn" id="mob-walk" onclick="setMobility('walk')">Astronaut Suit Walk</button>
+                </div>
+                <div class="btn-grid">
+                    <button class="hud-btn active" id="wx-calm" onclick="setWeather('calm')">Ls 90° Aphelion Calm</button>
+                    <button class="hud-btn amber" id="wx-storm" onclick="setWeather('storm')">Ls 270° Thermal Tide Storm</button>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">
+                    <span>4. A* Route Planner Engine</span>
+                    <span>JPL NAV</span>
+                </div>
+                <div class="btn-stack">
+                    <button class="hud-btn active" id="algo-safest" onclick="runPathfinder('safest')">
+                        🛡️ Safest Route (Avoid Low TI & Dust)
+                    </button>
+                    <button class="hud-btn" id="algo-science" onclick="runPathfinder('science')">
+                        🔬 High-Science (Lakebed + Boxwork)
+                    </button>
+                    <button class="hud-btn" id="algo-fastest" onclick="runPathfinder('fastest')">
+                        ⚡ Direct / Fastest Route (High Risk)
+                    </button>
+                </div>
+                <div style="display:flex; gap:5px; margin-top:5px;">
+                    <button class="hud-btn" style="flex:1;" onclick="animateRoverAlongPath()">▶ Auto-Sim</button>
+                    <button class="hud-btn active" style="flex:1;" onclick="switchAppMode('drive')">🎮 Drive in 3D</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="tactical-panel" id="right-hud">
+            <div>
+                <div class="panel-header">
+                    <span>Algorithm Risk Assessment</span>
+                    <span id="route-mode-badge">SAFEST A*</span>
+                </div>
+                <div id="danger-box">
+                    <div class="danger-title">OVERALL MISSION HAZARD INDEX</div>
+                    <div class="danger-score" id="danger-score-text">LOW (18/100)</div>
+                    <div class="danger-reason" id="danger-reason-text">
+                        Route avoids Bagnold Dune sand traps (low TES Thermal Inertia) and stays below 12° slope.
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">
+                    <span>Curiosity REMS Weather & Telemetry</span>
+                    <span id="sim-progress-label">SOL 4102</span>
+                </div>
+
+                <div class="stat-row">
+                    <div class="stat-label">
+                        <span>Atm Pressure / Thermal Tide</span>
+                        <strong id="stat-pressure" style="color:var(--cyan);">745 Pa (Nominal)</strong>
+                    </div>
+                    <div class="stat-label">
+                        <span>Route Distance / Est. Time</span>
+                        <strong id="stat-dist">34.2 km / 3.1 hrs</strong>
+                    </div>
+                </div>
+
+                <div class="stat-row">
+                    <div class="stat-label">
+                        <span>O₂ Consumables Used</span>
+                        <strong id="stat-o2">28%</strong>
+                    </div>
+                    <div class="progress-bg"><div class="progress-fill" id="bar-o2" style="width:28%;"></div></div>
+                </div>
+
+                <div class="stat-row">
+                    <div class="stat-label">
+                        <span>Rover / Suit Battery (DCI Solar Penalty)</span>
+                        <strong id="stat-bat">34%</strong>
+                    </div>
+                    <div class="progress-bg"><div class="progress-fill" id="bar-bat" style="width:34%;"></div></div>
+                </div>
+
+                <div class="stat-row">
+                    <div class="stat-label">
+                        <span>Radiation Dose (MSL RAD + Elevation)</span>
+                        <strong id="stat-rad">0.42 mSv</strong>
+                    </div>
+                    <div class="progress-bg"><div class="progress-fill" id="bar-rad" style="width:21%;"></div></div>
+                </div>
+
+                <div class="stat-row">
+                    <div class="stat-label">
+                        <span>Max Slope / TES Sand & Dust Risk</span>
+                        <strong id="stat-slope">11.4° / LOW</strong>
+                    </div>
+                    <div class="progress-bg"><div class="progress-fill" id="bar-slope" style="width:25%;"></div></div>
+                </div>
+
+                <div class="stat-row" style="margin-bottom:0;">
+                    <div class="stat-label">
+                        <span>Science Return (Paleolake + Boxwork)</span>
+                        <strong id="stat-sci" style="color:var(--cyan);">780 pts</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">
+                    <span>PIA02820 MOLA Elevation Profile</span>
+                    <span>Z-AXIS</span>
+                </div>
+                <canvas id="elevation-canvas" width="295" height="72"></canvas>
+            </div>
+
+            <div>
+                <div class="panel-header">
+                    <span>Gale Crater Stratigraphy & Targets</span>
+                    <span>USGS SIM3292</span>
+                </div>
+                <div id="waypoints-list">
+                    <div class="waypoint-chip" style="border-color:#00e676;">
+                        <span>🟢 Bradbury Landing (Aeolis Palus Lakebed)</span>
+                        <span>-4.5 km</span>
+                    </div>
+                    <div class="waypoint-chip" style="border-color:#ff2a55;">
+                        <span>⚠️ Bagnold Dunes (Low TES TI &lt;130)</span>
+                        <span>Sand Trap</span>
+                    </div>
+                    <div class="waypoint-chip" style="border-color:#d500f9;">
+                        <span>🔬 Boxwork & Clay-Sulfate Transition</span>
+                        <span>Hesperian Unit</span>
+                    </div>
+                    <div class="waypoint-chip" style="border-color:#00e5ff;">
+                        <span>🏁 Aeolis Mons (Mt. Sharp Medusae Unit)</span>
+                        <span>+1.0 km</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tactical-banner">
+            <span>🎮 <b>TACTICAL CONTROLS:</b> Left-Click Terrain to set custom EVA Target | Drag to Orbit 3D Map | Scroll to Zoom | Click <b>🚀 3. 3D Astronaut Rover Sim</b> for Third-Person WASD Driving</span>
+        </div>
+    </div>
+
+    <!-- ================= VIEW 3: GAME-STYLE 3D ASTRONAUT ROVER SIMULATOR ================= -->
+    <div id="drive-view">
+        <div id="drive-canvas-container"></div>
+        <!-- 3D AR Floating Directional Hazard Markers (13 Sectors around/ahead of Rover) -->
+        <div id="ar-hazard-overlay"></div>
+        <!-- 3D Floating NASA Landmark Name Labels -->
+        <div id="ar-landmark-overlay" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:24; overflow:hidden;"></div>
+        <!-- Mission Complete Arrival Overlay -->
+        <div id="mission-complete-banner">
+            <div style="font-size:32px; margin-bottom:6px;">🏁✨</div>
+            <div style="font-size:20px; font-weight:900; color:var(--green); letter-spacing:1px;">DESTINATION REACHED!</div>
+            <div id="arrival-subtitle" style="font-size:13px; color:#cfe8ff; margin:8px 0 14px 0;">
+                EVA Objective Completed Safely. Returning to 2D Mission Planner...
+            </div>
+        </div>
+
+        <!-- STEP 1: 2D MISSION MAP PLANNER MODAL (SHOWN AT START OR WHEN CLICKING TOP-RIGHT 2D MAP) -->
+        <div id="map-planner-overlay">
+            <div class="planner-card">
+                <div>
+                    <div class="panel-header" style="font-size:12px;">
+                        <span>🗺️ GALE CRATER 2D TACTICAL MAP (70×70 KM NASA DATA)</span>
+                        <span id="click-mode-indicator" style="color:var(--green);">CLICK TO SET: START / END</span>
+                    </div>
+                    <canvas id="planner-2d-canvas" width="500" height="500"></canvas>
+                    <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-muted); margin-top:6px;">
+                        <span>🟢 Start Point | 🏁 Destination | 🟣 NASA Landmarks</span>
+                        <span>Red/Dark = Bagnold Sand Traps | Center = Mt. Sharp</span>
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; justify-content:space-between;">
+                    <div>
+                        <h3 style="margin:0 0 6px 0; color:var(--cyan); font-size:16px;">
+                            STEP 1: SELECT START & DESTINATION ON 2D MAP
+                        </h3>
+                        <p style="font-size:11.5px; color:#b0c7e0; margin:0 0 12px 0; line-height:1.4;">
+                            Click directly on the 2D Gale Crater map or enter coordinates/landmarks below. All terrain elevation (MOLA PIA02820), geologic units (USGS SIM3292), and sand traps (MGS TES) come from NASA mission datasets.
+                        </p>
+
+                        <!-- Click Mode Selector -->
+                        <div class="btn-grid" style="margin-bottom:10px;">
+                            <button class="hud-btn active" id="pick-start-btn" onclick="setPlannerPickMode('start')">
+                                🟢 Click Map Sets START
+                            </button>
+                            <button class="hud-btn" id="pick-end-btn" onclick="setPlannerPickMode('end')">
+                                🏁 Click Map Sets DESTINATION
+                            </button>
+                        </div>
+
+                        <!-- START LOCATION INPUTS -->
+                        <div class="coord-box">
+                            <div style="font-size:11px; font-weight:800; color:var(--green);">
+                                🟢 START LOCATION (ASTRONAUT DEPLOYMENT)
+                            </div>
+                            <div class="coord-row">
+                                <label style="font-size:11px;">NASA Preset:</label>
+                                <select id="start-preset-select" style="flex:1;" onchange="applyPresetSelection('start')">
+                                    <option value="0">Bradbury Landing (-4.59°S, 137.44°E)</option>
+                                    <option value="1">Yellowknife Bay Ancient Lake (-4.58°S, 137.44°E)</option>
+                                    <option value="2">Kimberley Waypoint (-4.60°S, 137.40°E)</option>
+                                    <option value="3">Bagnold Dunes Edge (-4.63°S, 137.36°E)</option>
+                                    <option value="4">Vera Rubin Hematite Ridge (-4.68°S, 137.40°E)</option>
+                                    <option value="5">Glen Torridon Clay Unit (-4.70°S, 137.42°E)</option>
+                                    <option value="6">Mount Sharp Boxwork Site (-4.76°S, 137.38°E)</option>
+                                    <option value="7">Gediz Vallis Channel (-4.78°S, 137.43°E)</option>
+                                    <option value="8">Aeolis Mons Summit (+1.0km, -5.08°S, 137.85°E)</option>
+                                </select>
+                            </div>
+                            <div class="coord-row">
+                                <label style="font-size:11px;">Grid X (0-69):</label>
+                                <input type="number" id="start-gx" value="18" min="0" max="69" style="width:52px;" onchange="updateFromCoordInputs()">
+                                <label style="font-size:11px;">Grid Z (0-69):</label>
+                                <input type="number" id="start-gz" value="14" min="0" max="69" style="width:52px;" onchange="updateFromCoordInputs()">
+                                <span id="start-latlon-readout" style="font-size:10.5px; color:var(--cyan); margin-left:auto;">-4.59°S, 137.44°E</span>
+                            </div>
+                        </div>
+
+                        <!-- END LOCATION INPUTS -->
+                        <div class="coord-box">
+                            <div style="font-size:11px; font-weight:800; color:var(--cyan);">
+                                🏁 DESTINATION OBJECTIVE
+                            </div>
+                            <div class="coord-row">
+                                <label style="font-size:11px;">NASA Preset:</label>
+                                <select id="end-preset-select" style="flex:1;" onchange="applyPresetSelection('end')">
+                                    <option value="0">Bradbury Landing (-4.59°S, 137.44°E)</option>
+                                    <option value="1">Yellowknife Bay Ancient Lake (-4.58°S, 137.44°E)</option>
+                                    <option value="2">Kimberley Waypoint (-4.60°S, 137.40°E)</option>
+                                    <option value="3">Bagnold Dunes Edge (-4.63°S, 137.36°E)</option>
+                                    <option value="4">Vera Rubin Hematite Ridge (-4.68°S, 137.40°E)</option>
+                                    <option value="5">Glen Torridon Clay Unit (-4.70°S, 137.42°E)</option>
+                                    <option value="6" selected>Mount Sharp Boxwork Site (-4.76°S, 137.38°E)</option>
+                                    <option value="7">Gediz Vallis Channel (-4.78°S, 137.43°E)</option>
+                                    <option value="8">Aeolis Mons Summit (+1.0km, -5.08°S, 137.85°E)</option>
+                                </select>
+                            </div>
+                            <div class="coord-row">
+                                <label style="font-size:11px;">Grid X (0-69):</label>
+                                <input type="number" id="end-gx" value="29" min="0" max="69" style="width:52px;" onchange="updateFromCoordInputs()">
+                                <label style="font-size:11px;">Grid Z (0-69):</label>
+                                <input type="number" id="end-gz" value="31" min="0" max="69" style="width:52px;" onchange="updateFromCoordInputs()">
+                                <span id="end-latlon-readout" style="font-size:10.5px; color:var(--cyan); margin-left:auto;">-4.76°S, 137.38°E</span>
+                            </div>
+                        </div>
+
+                        <!-- Route Summary Preview -->
+                        <div class="coord-box" style="background:rgba(0,229,255,0.06);">
+                            <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:4px;">
+                                <span>Computed A* Safe Distance:</span>
+                                <strong id="planner-dist-text" style="color:var(--cyan);">22.4 km</strong>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-size:11.5px;">
+                                <span>Predicted Route Risk Level:</span>
+                                <strong id="planner-risk-text" style="color:var(--green);">LOW (19/100)</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:8px;">
+                        <button class="hud-btn" id="resume-drive-btn" style="display:none; padding:12px 16px; font-size:12.5px; border-color:var(--cyan);" onclick="resume3DRoverExploration()">
+                            ↩ Return to 3D View (Resume)
+                        </button>
+                        <button class="mode-switch-btn drive-cta" style="flex:1; justify-content:center; padding:12px; font-size:13px;" onclick="launch3DRoverExploration()">
+                            🚀 DEPLOY AT NEW START &amp; LAUNCH 3D SIM
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOP CENTER COMPASS & OBJECTIVE BAR -->
+        <div id="drive-compass-bar">
+            <span>🧭 HDG: <strong id="drive-heading" style="color:var(--cyan);">145° SE</strong></span>
+            <span>📍 POS: <strong id="drive-coords">-4.59°S, 137.44°E</strong></span>
+            <span>🏁 TARGET: <strong id="drive-target-dist" style="color:var(--green);">18.4 km</strong></span>
+            <span>⚡ SPEED: <strong id="drive-speed" style="color:var(--amber);">0.0 km/h</strong></span>
+            <span>🛰️ A* NAV: <strong id="drive-nav-status" style="color:var(--green);">ON OPTIMAL PATH</strong></span>
+        </div>
+
+        <!-- TOP-RIGHT CLICKABLE 2D MINIMAP -->
+        <div id="minimap-widget" onclick="open2DMapPlanner()">
+            <canvas id="minimap-canvas" width="189" height="165"></canvas>
+            <div class="minimap-caption">🗺️ CLICK TO OPEN FULL 2D MAP</div>
+        </div>
+
+        <!-- LEFT SIDE HUD: OVERALL DANGER INDEX & NASA SENSOR BREAKDOWN -->
+        <div id="drive-left-hud">
+            <div class="panel-header">
+                <span>⚠️ REAL-TIME HAZARD INDEX</span>
+                <span>NASA AI4MARS</span>
+            </div>
+            <div style="text-align:center; margin:8px 0 12px 0;">
+                <div style="font-size:10px; color:var(--text-muted); letter-spacing:1px;">CURRENT POSITION DANGER</div>
+                <div id="drive-danger-badge" style="font-size:28px; font-weight:900; color:var(--green); margin:2px 0;">
+                    LOW (14%)
+                </div>
+                <div id="drive-terrain-unit" style="font-size:11px; color:var(--cyan); font-weight:700;">
+                    Unit: Hl (Aeolis Palus Lakebed)
+                </div>
+            </div>
+
+            <div class="stat-row">
+                <div class="stat-label">
+                    <span>Slope Gradient (MOLA PIA02820)</span>
+                    <strong id="drive-slope-val">4.2°</strong>
+                </div>
+                <div class="progress-bg"><div class="progress-fill" id="drive-bar-slope" style="width:14%;"></div></div>
+            </div>
+
+            <div class="stat-row">
+                <div class="stat-label">
+                    <span>Sand Trap Risk (MGS TES TI)</span>
+                    <strong id="drive-ti-val">345 TI</strong>
+                </div>
+                <div class="progress-bg"><div class="progress-fill" id="drive-bar-ti" style="width:15%;"></div></div>
+            </div>
+
+            <div class="stat-row">
+                <div class="stat-label">
+                    <span>Dust Cover Index (TES DCI)</span>
+                    <strong id="drive-dci-val">0.24 DCI</strong>
+                </div>
+                <div class="progress-bg"><div class="progress-fill" id="drive-bar-dci" style="width:24%;"></div></div>
+            </div>
+
+            <div class="stat-row" style="margin-bottom:0;">
+                <div class="stat-label">
+                    <span>Radiation Dose (MSL RAD)</span>
+                    <strong id="drive-rad-val">0.032 mSv/h</strong>
+                </div>
+                <div class="progress-bg"><div class="progress-fill" id="drive-bar-rad" style="width:22%;"></div></div>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDE HUD: HAZARD CAUSES & SCIENTIFIC REASONS -->
+        <div id="drive-right-hud">
+            <div class="panel-header">
+                <span>🔬 HAZARD DIAGNOSTICS & REASONS</span>
+                <span>LIVE CAUSE</span>
+            </div>
+            <div id="drive-reasons-list">
+                <div class="reason-item" id="reason-slope">
+                    <b>1. Slope Stability (MOLA):</b> 4.2° gentle grade — well below 16° rover rollover threshold.
+                </div>
+                <div class="reason-item" id="reason-sand">
+                    <b>2. Surface Traction (MGS TES):</b> High thermal inertia (345 TI, Putzig 2005) indicates cemented Hesperian lakebed bedrock.
+                </div>
+                <div class="reason-item" id="reason-dust">
+                    <b>3. Dust & Meteorology (Ruff 2002):</b> Low dust cover (DCI 0.24); clear solar charging & visibility.
+                </div>
+                <div class="reason-item" id="reason-rad">
+                    <b>4. Radiation Shielding (Curiosity RAD):</b> Deep crater floor (-4,420m) provides maximum atmospheric column shielding.
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM WASD CONTROLS & VEHICLE TELEMETRY -->
+        <div id="drive-bottom-hud">
+            <div class="wasd-cluster">
+                <div></div>
+                <div class="key-cap" id="key-w">W</div>
+                <div></div>
+                <div class="key-cap" id="key-a">A</div>
+                <div class="key-cap" id="key-s">S</div>
+                <div class="key-cap" id="key-d">D</div>
+            </div>
+            <div>
+                <div style="font-size:12px; font-weight:800; color:#fff; margin-bottom:3px;">
+                    🎮 ROVER & ASTRONAUT CONTROLS: <span style="color:var(--cyan);">W / S</span> Drive Forward &amp; Reverse | <span style="color:var(--cyan);">A / D</span> Steer Left &amp; Right
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">
+                    Follow the glowing <span style="color:var(--green); font-weight:700;">Green A* Guidance Beacons</span> on the Martian surface or explore Gale Crater freely. Click top-right 2D map anytime to re-route.
+                </div>
+            </div>
+            <button class="hud-btn active" onclick="open2DMapPlanner()">🗺️ Re-Plan 2D Route</button>
+        </div>
+    </div>
+
+    <!-- ================= NASA RESOURCES & CITATIONS MODAL ================= -->
+    <div id="resources-modal">
+        <div id="modal-content">
+            <h2>📚 Official NASA, USGS & JPL Datasets Integrated in ARES-HUD</h2>
+            <p style="font-size:12.5px; color:var(--text-muted); margin-top:0;">
+                All 18 research portals, scientific papers, and mission layers provided by our team are directly modeled in the 70×70 km Gale Crater engine and 3D WASD Simulator:
+            </p>
+
+            <h3>1. Geologic Mapping & Global Topography (USGS / JPL / Mars Trek)</h3>
+            <div class="resource-card">
+                <b>USGS SIM3292 Global Geology Map of Mars</b> <span class="cite-badge">Tanaka et al., 2014 (USGS)</span><br>
+                Records the distribution of geologic units and landforms across Mars through time (Noachian highland rim, Hesperian transition units, Amazonian aeolian dunes) using thermal infrared and MOLA datasets unaffected by atmospheric haze.<br>
+                🔗 <a href="https://trek.nasa.gov/mars/#v=0.1&x=-0.17578124672105844&y=0&z=1&p=urn%3Aogc%3Adef%3Acrs%3AEPSG%3A%3A104905&d=&l=JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0%2Ctrue%2C1&l=JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd%2Ctrue%2C1&l=SIM3292_Global_Geology%2Ctrue%2C1&locale=&b=mars&e=-145.19530979158955%2C-142.73437233749482%2C144.84374729814743%2C142.73437233749482&sfz=&w=" target="_blank">Mars Trek SIM3292 Global Geology</a> |
+                <a href="https://www.usgs.gov/special-topics/planetary-geologic-mapping" target="_blank">USGS Planetary Geologic Mapping Program</a> |
+                <a href="https://www.jpl.nasa.gov/images/pia02820-mars-topography/" target="_blank">JPL PIA02820 Mars Topography</a>
+            </div>
+
+            <h3>2. Thermophysical & Dust Abundance Datasets (MGS TES)</h3>
+            <div class="resource-card">
+                <b>MGS TES Global Thermal Inertia (3-km / 20 ppd)</b> <span class="cite-badge">Putzig et al., 2005, Icarus 173, 325-341</span><br>
+                Measures subsurface heat storage during the day and night reradiation. Distinguishes unconsolidated sand/dust traps (Bagnold Dunes &lt;150 TI) from cemented bedrock (&gt;350 TI) critical for astronaut &amp; rover traction.<br>
+                🔗 <a href="https://trek.nasa.gov/mars/#v=0.1&x=-0.17578124672105844&y=0&z=1&p=urn%3Aogc%3Adef%3Acrs%3AEPSG%3A%3A104905&d=&l=JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0%2Ctrue%2C1&l=JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd%2Ctrue%2C1&l=TES_Thermal_Inertia%2Ctrue%2C1&locale=&b=mars&e=-145.19530979158955%2C-142.73437233749482%2C144.84374729814743%2C142.73437233749482&sfz=&w=" target="_blank">Mars Trek MGS TES Thermal Inertia Layer</a>
+            </div>
+            <div class="resource-card">
+                <b>MGS TES Dust Cover Index (DCI, 3.5-km / 16 ppd)</b> <span class="cite-badge">Ruff &amp; Christensen, 2002, JGR Vol. 107</span><br>
+                Quantifies spectrally obscuring fine dust accumulations independent of albedo. High dust cover (&lt;0.93 DCI) masks underlying mineralogy and degrades rover/suit solar array efficiency.<br>
+                🔗 <a href="https://trek.nasa.gov/mars/#v=0.1&x=-28.300780722089513&y=1.4062499737683822&z=1&p=urn%3Aogc%3Adef%3Acrs%3AEPSG%3A%3A104905&d=&l=JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0%2Ctrue%2C1&l=JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd%2Ctrue%2C1&l=TES_Thermal_Inertia%2Cfalse%2C1&l=TES_Dust%2Ctrue%2C1&locale=&b=mars&e=-173.32030926695802%2C-141.32812236372644%2C116.718747822779%2C144.1406223112632&sfz=&w=" target="_blank">Mars Trek MGS TES Dust Cover Layer</a>
+            </div>
+
+            <h3>3. Autonomous Rover Driving & AI Terrain Classification</h3>
+            <div class="resource-card">
+                <b>AI4Mars Dataset &amp; JPL Rover Driving Route System</b> <span class="cite-badge">NASA Open Data / JPL Edu</span><br>
+                Terrain-aware autonomous driving dataset labeling Martian surface into Soil, Bedrock, Sand, and Big Rocks, paired with JPL rover route-planning constraints.<br>
+                🔗 <a href="https://data.nasa.gov/dataset/ai4mars-a-dataset-for-terrain-aware-autonomous-driving-on-mars/resource/5984fb65-c116-464c-966b-61fe544c3b7b" target="_blank">AI4Mars Dataset (data.nasa.gov)</a> |
+                <a href="https://www.jpl.nasa.gov/edu/resources/project/map-a-mars-rover-driving-route/" target="_blank">JPL Map a Mars Rover Driving Route</a>
+            </div>
+
+            <h3>4. Martian Meteorology, Seasonal Cycles & Thermal Tides</h3>
+            <div class="resource-card">
+                <b>Curiosity REMS, Perseverance MEDA &amp; InSight Meteorology</b> <span class="cite-badge">NASA Science</span><br>
+                Models diurnal thermal tides (atmospheric pressure waves driven by solar heating), seasonal CO₂ pressure cycles across Martian years, and dust storm hazards.<br>
+                🔗 <a href="https://science.nasa.gov/resource/curiosity-rover-report-mars-weather-report/" target="_blank">Curiosity Mars Weather Report</a> |
+                <a href="https://science.nasa.gov/resource/seasonal-cycles-in-curiositys-first-two-martian-years/" target="_blank">Seasonal Cycles in Curiosity's First Two Martian Years</a> |
+                <a href="https://science.nasa.gov/resource/thermal-tides-at-mars/" target="_blank">Thermal Tides at Mars</a><br>
+                🔗 <a href="https://www.rmets.org/metmatters/martian-meteorology" target="_blank">RMetS Martian Meteorology</a> |
+                <a href="https://science.nasa.gov/resource/perseverances-weather-sensors-deployed/" target="_blank">Perseverance MEDA Sensors</a> |
+                <a href="https://www.nasa.gov/missions/insight/is-there-weather-on-mars-we-asked-a-nasa-technologist-episode-4/" target="_blank">InSight: Is There Weather on Mars?</a>
+            </div>
+
+            <h3>5. Gale Crater Paleolake &amp; Geospatial Portals</h3>
+            <div class="resource-card">
+                <b>Ancient Lake in Gale Crater &amp; Planetary Data Portals</b> <span class="cite-badge">Curiosity / PDS ODE / Esri</span><br>
+                Curiosity rover discovery of ancient standing water lakes filling Gale Crater floor (Murray formation mudstones &amp; delta deposits), plus global GIS portals.<br>
+                🔗 <a href="https://www.americaspace.com/2014/12/09/curiosity-rover-discovers-huge-lake-once-filled-gale-crater/" target="_blank">Curiosity Discovers Huge Ancient Lake in Gale Crater</a> |
+                <a href="https://trek.nasa.gov/mars/" target="_blank">JPL Mars Trek</a> |
+                <a href="https://explore-mars.esri.com/" target="_blank">Esri Explore Mars 3D</a> |
+                <a href="https://ode.rsl.wustl.edu/mars/mapsearch" target="_blank">PDS Orbital Data Explorer (ODE)</a> |
+                <a href="https://marsoweb.nas.nasa.gov/globalData/" target="_blank">NASA Marsoweb Global Data</a> |
+                <a href="https://data.nasa.gov/dataset/?tags=mars" target="_blank">NASA Open Mars Datasets</a>
+            </div>
+
+            <div style="text-align: right; margin-top: 14px;">
+                <button class="hud-btn active" onclick="closeResources()">Close Dataset Briefing</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================================================================
+           PART 1: GLOBAL 3D MARS VIEWER & 3-MODE SWITCHING
+           ========================================================================= */
+        const viewer = document.getElementById('marsViewer');
+        const deleteComboBox = document.getElementById('deleteComboBox');
+        let currentAppMode = 'global'; // 'global', 'gale', 'drive'
+        let galeInitialized = false;
+        let driveInitialized = false;
+        let MARS_GLOBE_RADIUS = 502;
+
+        // Official NASA Gale Crater Landmarks (Grid 0..69, Lat/Lon, Elevation)
+        const GALE_LANDMARKS = [
+            { id: 0, name: "Bradbury Landing", short: "Bradbury", x: 18, z: 14, lat: -4.59, lon: 137.44, color: "#00e676" },
+            { id: 1, name: "Yellowknife Bay (Paleolake)", short: "Yellowknife", x: 20, z: 13, lat: -4.58, lon: 137.44, color: "#00e5ff" },
+            { id: 2, name: "Kimberley Waypoint", short: "Kimberley", x: 17, z: 20, lat: -4.60, lon: 137.40, color: "#ffea00" },
+            { id: 3, name: "Bagnold Dunes (Low TI Sand)", short: "Bagnold Dunes", x: 22, z: 24, lat: -4.63, lon: 137.36, color: "#ff2a55" },
+            { id: 4, name: "Vera Rubin Hematite Ridge", short: "Vera Rubin", x: 25, z: 27, lat: -4.68, lon: 137.40, color: "#ff9100" },
+            { id: 5, name: "Glen Torridon Clay Unit", short: "Glen Torridon", x: 27, z: 29, lat: -4.70, lon: 137.42, color: "#00e5ff" },
+            { id: 6, name: "Mount Sharp Boxwork Site", short: "Boxwork Site", x: 29, z: 31, lat: -4.76, lon: 137.38, color: "#d500f9" },
+            { id: 7, name: "Gediz Vallis Channel", short: "Gediz Vallis", x: 33, z: 27, lat: -4.78, lon: 137.43, color: "#ff9100" },
+            { id: 8, name: "Aeolis Mons Summit (+1km)", short: "Mt. Sharp Peak", x: 36, z: 36, lat: -5.08, lon: 137.85, color: "#ffffff" }
+        ];
+
+        function latLonToMarsSurface(lat, lon) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon * Math.PI) / 180;
+            const nx = Math.sin(phi) * Math.cos(theta);
+            const ny = Math.cos(phi);
+            const nz = -Math.sin(phi) * Math.sin(theta);
+            return {
+                position: `${(nx * MARS_GLOBE_RADIUS).toFixed(2)}m ${(ny * MARS_GLOBE_RADIUS).toFixed(2)}m ${(nz * MARS_GLOBE_RADIUS).toFixed(2)}m`,
+                normal: `${nx.toFixed(4)}m ${ny.toFixed(4)}m ${nz.toFixed(4)}m`
+            };
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            updateDropdown();
+            generateGaleCraterData();
+        });
+
+        function toggleInterfaceMode() {
+            // Legacy bridge for Java button: cycles between Global -> Gale Sandbox -> 3D Drive Sim
+            if (currentAppMode === 'global') switchAppMode('gale');
+            else if (currentAppMode === 'gale') switchAppMode('drive');
+            else switchAppMode('global');
+        }
+
+        function switchAppMode(mode) {
+            currentAppMode = mode;
+            document.getElementById('global-view').style.display = (mode === 'global') ? 'block' : 'none';
+            document.getElementById('global-controls').style.display = (mode === 'global') ? 'flex' : 'none';
+            document.getElementById('gale-view').style.display = (mode === 'gale') ? 'block' : 'none';
+            document.getElementById('drive-view').style.display = (mode === 'drive') ? 'block' : 'none';
+
+            document.getElementById('btn-mode-global').classList.toggle('active-mode', mode === 'global');
+            document.getElementById('btn-mode-gale').classList.toggle('active-mode', mode === 'gale');
+            document.getElementById('btn-mode-drive').classList.toggle('active-mode', mode === 'drive');
+
+            const subtitle = document.getElementById('mode-subtitle');
+            if (mode === 'global') {
+                subtitle.innerText = 'MODE: GLOBAL ORBITAL RECONNAISSANCE';
+            } else if (mode === 'gale') {
+                subtitle.innerText = 'MODE: GALE CRATER 70×70 KM EVA TACTICAL SANDBOX (USGS / TES / AI4MARS)';
+                if (!galeInitialized) {
+                    initGaleTacticalSandbox();
+                    galeInitialized = true;
+                } else {
+                    onWindowResize();
+                }
+            } else if (mode === 'drive') {
+                subtitle.innerText = 'MODE: 3D THIRD-PERSON ASTRONAUT ROVER SIMULATOR (GALE CRATER WASD)';
+                if (!driveInitialized) {
+                    initDriveSimulator();
+                    driveInitialized = true;
+                } else {
+                    onDriveResize();
+                    draw2DPlannerMap();
+                }
+            }
+        }
+
+        function addLandmark() {
+            const name = document.getElementById('nameField').value.trim();
+            const lat = parseFloat(document.getElementById('latField').value);
+            const lon = parseFloat(document.getElementById('lonField').value);
+            if (!name || isNaN(lat) || lat < -90 || lat > 90) return;
+
+            const coords = latLonToMarsSurface(lat, lon);
+            const slotName = 'hotspot-' + Date.now();
+            const button = document.createElement('button');
+            button.className = 'landmark-pin';
+            button.slot = slotName;
+            button.setAttribute('data-position', coords.position);
+            button.setAttribute('data-normal', coords.normal);
+            button.innerText = `${name} (${lat}°, ${lon}°)`;
+
+            viewer.appendChild(button);
+            updateDropdown();
+            document.getElementById('nameField').value = "";
+        }
+
+        function updateDropdown() {
+            deleteComboBox.innerHTML = "";
+            const pins = viewer.querySelectorAll('.landmark-pin');
+            pins.forEach(pin => {
+                const opt = document.createElement('option');
+                opt.value = pin.slot;
+                opt.innerText = pin.innerText;
+                deleteComboBox.appendChild(opt);
+            });
+        }
+
+        function deleteLandmark() {
+            const slot = deleteComboBox.value;
+            const target = viewer.querySelector(`[slot="${slot}"]`);
+            if (target) {
+                target.remove();
+                updateDropdown();
+            }
+        }
+
+        function resetView() {
+            viewer.cameraOrbit = '0deg 75deg 105%';
+            viewer.fieldOfView = '30deg';
+        }
+
+        function openResources() {
+            document.getElementById('resources-modal').style.display = 'flex';
+        }
+
+        function closeResources() {
+            document.getElementById('resources-modal').style.display = 'none';
+        }
+
+        /* =========================================================================
+           PART 2: GALE CRATER 70KM x 70KM SCIENTIFIC DATA MODEL
+           ========================================================================= */
+        const GRID_SIZE = 70;
+        const WORLD_SCALE = 1.0;
+        let terrainData = [];
+
+        let START_NODE = { x: 18, z: 14, name: "Bradbury Landing" };
+        const BOXWORK_NODE = { x: 29, z: 31, name: "Mount Sharp Boxwork Formations" };
+        const GEDIZ_NODE = { x: 33, z: 27, name: "Gediz Vallis Ridge" };
+        const SUMMIT_NODE = { x: 36, z: 36, name: "Aeolis Mons Peak Objective" };
+        let currentGoalNode = { x: 29, z: 31, name: "Mount Sharp Boxwork Formations" };
+
+        let currentLayer = 'optical';
+        let mobilityMode = 'rover';
+        let weatherMode = 'calm';
+        let currentAlgo = 'safest';
+        let showPaleoLake = false;
+        let activePath = [];
+
+        const LAYER_CITATIONS = {
+            optical: "<b>AI4Mars + JPL Rover Driving:</b> Classifies terrain into Bedrock, Sand, Big Rocks, and Soil to prevent rover wheel slip and rollover (&gt;16° slope).",
+            geology: "<b>USGS SIM3292 Global Geology (Tanaka et al., 2014):</b> Maps Noachian crater rim (brown), Hesperian lacustrine lakebed &amp; sulfate transition (teal/purple), and Amazonian dunes (amber).",
+            topo: "<b>JPL PIA02820 MOLA Topography:</b> Digital elevation from -4,500m Aeolis Palus basin floor up to +1,000m Aeolis Mons (Mount Sharp) peak.",
+            thermal: "<b>MGS TES Thermal Inertia (Putzig et al., 2005, 3km):</b> Low TI (&lt;150, Red) indicates unconsolidated Bagnold Dune sand traps; High TI (&gt;350, Cyan) indicates solid bedrock.",
+            dust: "<b>MGS TES Dust Cover Index (Ruff &amp; Christensen, 2002, 3.5km):</b> High dust accumulation obscures spectral mineralogy and reduces solar array output.",
+            science: "<b>Paleolake &amp; Boxwork Science (Curiosity 2014/2025):</b> Highlights ancient Gale Crater lakebed mudstones (-3,950m shoreline) and groundwater-cemented Boxwork veins."
+        };
+
+        function pseudoNoise(x, z) {
+            return (
+                Math.sin(x * 0.17 + z * 0.11) * 0.45 +
+                Math.cos(x * 0.31 - z * 0.23) * 0.30 +
+                Math.sin(x * 0.63 + z * 0.57) * 0.15 +
+                Math.cos(x * 1.15 - z * 0.95) * 0.10
+            );
+        }
+
+        function gridToLatLon(gx, gz) {
+            const lat = (-4.30 - (gz / GRID_SIZE) * 1.35).toFixed(2);
+            const lon = (136.90 + (gx / GRID_SIZE) * 1.40).toFixed(2);
+            return { lat, lon };
+        }
+
+        function generateGaleCraterData() {
+            if (terrainData.length > 0) return;
+            const cx = 35, cz = 35;
+
+            for (let z = 0; z < GRID_SIZE; z++) {
+                const row = [];
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const dx = x - cx;
+                    const dz = z - cz;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+
+                    let mtSharp = 5300 * Math.exp(-(dist * dist) / (2 * 10.5 * 10.5));
+                    if (dx < 2 && dz < 2) {
+                        mtSharp += 350 * Math.exp(-((x - 29) ** 2 + (z - 31) ** 2) / 18);
+                    }
+                    let rim = 0;
+                    if (dist > 25) {
+                        rim = 2600 * Math.pow((dist - 25) / 12, 2.1);
+                    }
+                    const northTilt = (z - cz) * 14;
+                    const roughness = pseudoNoise(x, z) * 190;
+                    const elevationMeters = -4500 + mtSharp + rim + northTilt + roughness;
+                    const visualY = (elevationMeters + 4600) * 0.0022;
+
+                    const angle = Math.atan2(dz, dx);
+                    let isBagnoldDune = false;
+                    let duneFactor = 0;
+                    if (dist > 10.5 && dist < 16.5 && angle < -0.2 && angle > -2.8) {
+                        duneFactor = Math.exp(-Math.pow(dist - 13.5, 2) / 3.2);
+                        isBagnoldDune = duneFactor > 0.35;
+                    }
+                    let thermalInertia = 340 + (mtSharp * 0.04) + pseudoNoise(x * 1.4, z * 1.4) * 55;
+                    if (duneFactor > 0) {
+                        thermalInertia -= duneFactor * 245;
+                    }
+                    thermalInertia = Math.max(75, Math.min(580, thermalInertia));
+
+                    let dustAbundance = 0.25 + Math.max(0, (elevationMeters + 3500) / 5200) * 0.55 + pseudoNoise(x * 0.8, z * 0.8) * 0.18;
+                    if (isBagnoldDune) dustAbundance = 0.18;
+                    dustAbundance = Math.max(0.05, Math.min(0.98, dustAbundance));
+
+                    let geoUnit = 'Hl';
+                    if (isBagnoldDune) geoUnit = 'Ahd';
+                    else if (dist > 25.5) geoUnit = 'Nh';
+                    else if (elevationMeters > -3400) geoUnit = 'Htu';
+
+                    const isPaleoLakebed = elevationMeters < -3950;
+
+                    const distBoxwork = Math.sqrt((x - 29) ** 2 + (z - 31) ** 2);
+                    const distGediz = Math.sqrt((x - 33) ** 2 + (z - 27) ** 2);
+                    const distSulfate = Math.abs(dist - 11.5);
+                    let scienceScore = 15 + Math.max(0, 40 - distSulfate * 8) + (isPaleoLakebed ? 18 : 0);
+                    scienceScore += 75 * Math.exp(-(distBoxwork * distBoxwork) / 14);
+                    scienceScore += 60 * Math.exp(-(distGediz * distGediz) / 12);
+                    scienceScore = Math.min(100, Math.round(scienceScore));
+
+                    row.push({
+                        x, z,
+                        elevation: elevationMeters,
+                        visualY,
+                        slope: 0,
+                        thermal: thermalInertia,
+                        dustIndex: dustAbundance,
+                        geoUnit,
+                        isBagnoldDune,
+                        isPaleoLakebed,
+                        ai4marsClass: 'SOIL',
+                        baseRadiation: 0,
+                        science: scienceScore
+                    });
+                }
+                terrainData.push(row);
+            }
+
+            for (let z = 0; z < GRID_SIZE; z++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const c = terrainData[z][x];
+                    const x1 = Math.max(0, x - 1), x2 = Math.min(GRID_SIZE - 1, x + 1);
+                    const z1 = Math.max(0, z - 1), z2 = Math.min(GRID_SIZE - 1, z + 1);
+                    const dzdx = (terrainData[z][x2].elevation - terrainData[z][x1].elevation) / ((x2 - x1) * 1000);
+                    const dzdz = (terrainData[z2][x].elevation - terrainData[z1][x].elevation) / ((z2 - z1) * 1000);
+                    const grad = Math.sqrt(dzdx * dzdx + dzdz * dzdz);
+                    let slopeDeg = Math.atan(grad) * (180 / Math.PI) * 1.45 + Math.abs(pseudoNoise(x * 2.1, z * 2.1)) * 4.5;
+                    c.slope = Math.min(42, slopeDeg);
+
+                    if (c.thermal < 175) c.ai4marsClass = 'SAND_TRAP';
+                    else if (c.slope > 17.5) c.ai4marsClass = 'BIG_ROCKS';
+                    else if (c.thermal > 365) c.ai4marsClass = 'BEDROCK';
+                    else c.ai4marsClass = 'FIRM_SOIL';
+
+                    const altNormalized = (c.elevation + 4500) / 5500;
+                    c.baseRadiation = 0.028 + altNormalized * 0.045 + (c.slope > 18 ? -0.006 : 0.004);
+                }
+            }
+        }
+
+        function evaluateCellHazard(cell) {
+            const maxSafeSlope = (mobilityMode === 'rover') ? 16 : 22;
+            let slopeRisk = 0;
+            if (cell.slope > maxSafeSlope) {
+                slopeRisk = Math.min(100, 45 + (cell.slope - maxSafeSlope) * 4.2);
+            } else {
+                slopeRisk = (cell.slope / maxSafeSlope) * 35;
+            }
+
+            let sandRisk = 0;
+            if (cell.thermal < 190) {
+                sandRisk = ((190 - cell.thermal) / 115) * (mobilityMode === 'rover' ? 95 : 50);
+            }
+
+            const dustRisk = cell.dustIndex * (weatherMode === 'storm' ? 85 : 35);
+            const stormMult = (weatherMode === 'storm') ? 3.4 : 1.0;
+            const suitExposure = (mobilityMode === 'walk') ? 1.65 : 1.0;
+            const radDoseRate = cell.baseRadiation * stormMult * suitExposure;
+            const radRisk = Math.min(100, (radDoseRate / 0.22) * 100);
+
+            const composite = Math.min(100, slopeRisk * 0.40 + sandRisk * 0.30 + dustRisk * 0.15 + radRisk * 0.15);
+            return {
+                total: composite,
+                slopeRisk,
+                sandRisk,
+                dustRisk,
+                radRisk,
+                radDoseRate
+            };
+        }
+
+        /* =========================================================================
+           PART 3: VIEW 2 - GALE CRATER 70x70KM SANDBOX
+           ========================================================================= */
+        let scene, camera, renderer, controls, terrainMesh, wireframeMesh, paleoLakeMesh;
+        let routeLine, roverMarker, raycaster, mouse;
+        let animFrameId = null;
+        let simIndex = 0;
+
+        function initGaleTacticalSandbox() {
+            const container = document.getElementById('gale-canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x06080d);
+            scene.fog = new THREE.FogExp2(0x080b12, 0.0065);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 500);
+            camera.position.set(0, 52, 58);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI / 2 - 0.04;
+            controls.minDistance = 12;
+            controls.maxDistance = 135;
+
+            scene.add(new THREE.AmbientLight(0xddeeff, 0.58));
+            const dirLight = new THREE.DirectionalLight(0xffddaa, 0.95);
+            dirLight.position.set(45, 70, 30);
+            scene.add(dirLight);
+
+            const geom = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE, GRID_SIZE - 1, GRID_SIZE - 1);
+            geom.rotateX(-Math.PI / 2);
+
+            const posAttr = geom.attributes.position;
+            const colors = new Float32Array(posAttr.count * 3);
+            for (let i = 0; i < posAttr.count; i++) {
+                const ix = i % GRID_SIZE;
+                const iz = Math.floor(i / GRID_SIZE);
+                posAttr.setY(i, terrainData[iz][ix].visualY);
+            }
+            geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geom.computeVertexNormals();
+
+            terrainMesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.78,
+                metalness: 0.08
+            }));
+            scene.add(terrainMesh);
+
+            wireframeMesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+                color: 0x00e5ff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.07
+            }));
+            wireframeMesh.position.y = 0.03;
+            scene.add(wireframeMesh);
+
+            const lakeGeom = new THREE.PlaneGeometry(GRID_SIZE - 1, GRID_SIZE - 1);
+            lakeGeom.rotateX(-Math.PI / 2);
+            paleoLakeMesh = new THREE.Mesh(lakeGeom, new THREE.MeshStandardMaterial({
+                color: 0x00b8ff,
+                transparent: true,
+                opacity: 0.48,
+                roughness: 0.2,
+                metalness: 0.4
+            }));
+            paleoLakeMesh.position.y = (-3950 + 4600) * 0.0022;
+            paleoLakeMesh.visible = false;
+            scene.add(paleoLakeMesh);
+
+            const galeLabelContainer = document.getElementById('gale-landmark-labels');
+            galeLabelContainer.innerHTML = '';
+            window.galeSandboxLabels = [];
+            GALE_LANDMARKS.forEach(lm => {
+                createLandmarkBeacon(scene, lm.x, lm.z, parseInt(lm.color.replace('#', '0x')), 1.9);
+                const tag = document.createElement('div');
+                tag.className = 'ar-landmark-pin';
+                tag.style.borderColor = lm.color;
+                tag.innerHTML = `📍 ${lm.short}`;
+                galeLabelContainer.appendChild(tag);
+                window.galeSandboxLabels.push({ lm, el: tag });
+            });
+
+            roverMarker = new THREE.Mesh(
+                new THREE.SphereGeometry(0.75, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            scene.add(roverMarker);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            renderer.domElement.addEventListener('mousemove', onTerrainMouseMove);
+            renderer.domElement.addEventListener('pointerdown', onTerrainPointerDown);
+            window.addEventListener('resize', onWindowResize);
+
+            updateTerrainLayerColors();
+            runPathfinder('safest');
+            animateThreeJS();
+        }
+
+        function togglePaleoLake() {
+            showPaleoLake = !showPaleoLake;
+            if (paleoLakeMesh) paleoLakeMesh.visible = showPaleoLake;
+            document.getElementById('lake-toggle-btn').classList.toggle('active', showPaleoLake);
+        }
+
+        function gridToWorld(gx, gz) {
+            const wx = (gx - (GRID_SIZE - 1) / 2) * WORLD_SCALE;
+            const wz = (gz - (GRID_SIZE - 1) / 2) * WORLD_SCALE;
+            const iz = Math.max(0, Math.min(GRID_SIZE - 1, Math.round(gz)));
+            const ix = Math.max(0, Math.min(GRID_SIZE - 1, Math.round(gx)));
+            const wy = terrainData[iz][ix].visualY;
+            return new THREE.Vector3(wx, wy, wz);
+        }
+
+        // Bilinear height interpolation for smooth 3D rover driving
+        function getInterpolatedVisualY(gx, gz) {
+            const x0 = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(gx)));
+            const x1 = Math.max(0, Math.min(GRID_SIZE - 1, x0 + 1));
+            const z0 = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(gz)));
+            const z1 = Math.max(0, Math.min(GRID_SIZE - 1, z0 + 1));
+            const tx = gx - x0;
+            const tz = gz - z0;
+            const y00 = terrainData[z0][x0].visualY;
+            const y10 = terrainData[z0][x1].visualY;
+            const y01 = terrainData[z1][x0].visualY;
+            const y11 = terrainData[z1][x1].visualY;
+            const y0 = y00 * (1 - tx) + y10 * tx;
+            const y1 = y01 * (1 - tx) + y11 * tx;
+            return y0 * (1 - tz) + y1 * tz;
+        }
+
+        function createLandmarkBeacon(targetScene, gx, gz, hexColor, height) {
+            const pos = gridToWorld(gx, gz);
+            const group = new THREE.Group();
+
+            const pole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.12, 0.12, height, 8),
+                new THREE.MeshBasicMaterial({ color: hexColor })
+            );
+            pole.position.set(pos.x, pos.y + height / 2, pos.z);
+            group.add(pole);
+
+            const ringGeom = new THREE.RingGeometry(0.45, 0.8, 24);
+            ringGeom.rotateX(-Math.PI / 2);
+            const ring = new THREE.Mesh(ringGeom, new THREE.MeshBasicMaterial({ color: hexColor, side: THREE.DoubleSide }));
+            ring.position.set(pos.x, pos.y + 0.12, pos.z);
+            group.add(ring);
+
+            targetScene.add(group);
+        }
+
+        function lerpColor(c1, c2, t) {
+            return [
+                c1[0] + (c2[0] - c1[0]) * t,
+                c1[1] + (c2[1] - c1[1]) * t,
+                c1[2] + (c2[2] - c1[2]) * t
+            ];
+        }
+
+        function updateTerrainLayerColors() {
+            if (!terrainMesh) return;
+            const colorAttr = terrainMesh.geometry.attributes.color;
+            const count = colorAttr.count;
+
+            for (let i = 0; i < count; i++) {
+                const ix = i % GRID_SIZE;
+                const iz = Math.floor(i / GRID_SIZE);
+                const cell = terrainData[iz][ix];
+                const haz = evaluateCellHazard(cell);
+                let rgb = [0.6, 0.3, 0.2];
+
+                if (currentLayer === 'optical') {
+                    const altFactor = Math.max(0, Math.min(1, (cell.elevation + 4500) / 5500));
+                    rgb = lerpColor([0.42, 0.22, 0.15], [0.82, 0.52, 0.34], altFactor);
+                    if (cell.isBagnoldDune) rgb = [0.20, 0.17, 0.25];
+                    if (haz.total > 56) {
+                        const hT = Math.min(1, (haz.total - 56) / 44);
+                        rgb = lerpColor(rgb, [1.0, 0.15, 0.25], hT * 0.78);
+                    }
+                } else if (currentLayer === 'geology') {
+                    if (cell.geoUnit === 'Ahd') rgb = [0.95, 0.68, 0.15];
+                    else if (cell.geoUnit === 'Nh') rgb = [0.58, 0.34, 0.22];
+                    else if (cell.geoUnit === 'Htu') {
+                        const t = Math.min(1, (cell.elevation + 3400) / 4400);
+                        rgb = lerpColor([0.55, 0.28, 0.78], [0.88, 0.45, 0.68], t);
+                    } else {
+                        rgb = cell.isPaleoLakebed ? [0.12, 0.62, 0.68] : [0.28, 0.52, 0.45];
+                    }
+                } else if (currentLayer === 'topo') {
+                    const t = Math.max(0, Math.min(1, (cell.elevation + 4500) / 5600));
+                    if (t < 0.33) rgb = lerpColor([0.05, 0.35, 0.95], [0.0, 0.85, 0.55], t / 0.33);
+                    else if (t < 0.66) rgb = lerpColor([0.0, 0.85, 0.55], [1.0, 0.85, 0.1], (t - 0.33) / 0.33);
+                    else rgb = lerpColor([1.0, 0.85, 0.1], [1.0, 0.2, 0.3], (t - 0.66) / 0.34);
+                } else if (currentLayer === 'thermal') {
+                    const t = Math.max(0, Math.min(1, (cell.thermal - 85) / 420));
+                    if (t < 0.35) rgb = lerpColor([1.0, 0.1, 0.35], [1.0, 0.65, 0.0], t / 0.35);
+                    else rgb = lerpColor([1.0, 0.65, 0.0], [0.0, 0.85, 1.0], (t - 0.35) / 0.65);
+                } else if (currentLayer === 'dust') {
+                    const t = cell.dustIndex;
+                    if (t < 0.5) rgb = lerpColor([0.12, 0.65, 0.85], [0.90, 0.78, 0.25], t * 2);
+                    else rgb = lerpColor([0.90, 0.78, 0.25], [0.98, 0.32, 0.12], (t - 0.5) * 2);
+                } else if (currentLayer === 'science') {
+                    const t = cell.science / 100;
+                    if (t < 0.45) rgb = lerpColor([0.12, 0.22, 0.36], [0.0, 0.65, 0.85], t / 0.45);
+                    else rgb = lerpColor([0.0, 0.75, 0.95], [0.92, 0.15, 1.0], (t - 0.45) / 0.55);
+                }
+
+                colorAttr.setXYZ(i, rgb[0], rgb[1], rgb[2]);
+            }
+            colorAttr.needsUpdate = true;
+        }
+
+        /* =========================================================================
+           PART 4: A* PATHFINDING & TELEMETRY
+           ========================================================================= */
+        function runPathfinder(mode) {
+            currentAlgo = mode;
+            ['safest', 'science', 'fastest'].forEach(m => {
+                const el = document.getElementById('algo-' + m);
+                if (el) el.classList.toggle('active', m === mode);
+            });
+            const badge = document.getElementById('route-mode-badge');
+            if (badge) badge.innerText = mode.toUpperCase() + ' A*';
+
+            if (mode === 'science') {
+                const seg1 = computeAStarSegment(START_NODE, BOXWORK_NODE, mode);
+                const seg2 = computeAStarSegment(BOXWORK_NODE, GEDIZ_NODE, mode);
+                const seg3 = computeAStarSegment(GEDIZ_NODE, SUMMIT_NODE, mode);
+                activePath = [...seg1, ...seg2.slice(1), ...seg3.slice(1)];
+            } else {
+                activePath = computeAStarSegment(START_NODE, currentGoalNode, mode);
+            }
+
+            if (scene) render3DRouteLine();
+            evaluateRouteTelemetry();
+            drawElevationProfile();
+        }
+
+        function computeAStarSegment(start, goal, mode) {
+            const openSet = [{ x: start.x, z: start.z, g: 0, f: 0 }];
+            const cameFrom = {};
+            const gScore = {};
+            const key = (x, z) => `${x},${z}`;
+
+            gScore[key(start.x, start.z)] = 0;
+
+            const dirs = [
+                { dx: 1, dz: 0, dist: 1 }, { dx: -1, dz: 0, dist: 1 },
+                { dx: 0, dz: 1, dist: 1 }, { dx: 0, dz: -1, dist: 1 },
+                { dx: 1, dz: 1, dist: 1.414 }, { dx: -1, dz: 1, dist: 1.414 },
+                { dx: 1, dz: -1, dist: 1.414 }, { dx: -1, dz: -1, dist: 1.414 }
+            ];
+
+            while (openSet.length > 0) {
+                openSet.sort((a, b) => a.f - b.f);
+                const current = openSet.shift();
+
+                if (current.x === goal.x && current.z === goal.z) {
+                    const path = [];
+                    let currKey = key(current.x, current.z);
+                    let currNode = { x: current.x, z: current.z };
+                    while (currKey) {
+                        path.unshift(currNode);
+                        currNode = cameFrom[currKey];
+                        currKey = currNode ? key(currNode.x, currNode.z) : null;
+                    }
+                    return path;
+                }
+
+                for (const d of dirs) {
+                    const nx = current.x + d.dx;
+                    const nz = current.z + d.dz;
+                    if (nx < 0 || nx >= GRID_SIZE || nz < 0 || nz >= GRID_SIZE) continue;
+
+                    const cell = terrainData[nz][nx];
+                    const haz = evaluateCellHazard(cell);
+
+                    let stepCost = d.dist;
+                    if (mode === 'safest') {
+                        stepCost = d.dist * (1.0 + Math.pow(haz.total / 14, 2.3));
+                    } else if (mode === 'science') {
+                        const sciBonus = (100 - cell.science) / 28;
+                        stepCost = d.dist * (1.0 + Math.pow(haz.total / 20, 1.8) + sciBonus);
+                    } else if (mode === 'fastest') {
+                        stepCost = d.dist * (1.0 + (haz.total / 140));
+                    }
+
+                    const tentativeG = gScore[key(current.x, current.z)] + stepCost;
+                    const nKey = key(nx, nz);
+
+                    if (gScore[nKey] === undefined || tentativeG < gScore[nKey]) {
+                        cameFrom[nKey] = { x: current.x, z: current.z };
+                        gScore[nKey] = tentativeG;
+                        const h = Math.sqrt((nx - goal.x) ** 2 + (nz - goal.z) ** 2);
+                        openSet.push({ x: nx, z: nz, g: tentativeG, f: tentativeG + h });
+                    }
+                }
+            }
+            return [start, goal];
+        }
+
+        function render3DRouteLine() {
+            if (routeLine) {
+                scene.remove(routeLine);
+                routeLine.geometry.dispose();
+            }
+            if (activePath.length < 2) return;
+
+            const points = activePath.map(p => {
+                const v = gridToWorld(p.x, p.z);
+                v.y += 0.32;
+                return v;
+            });
+
+            const curve = new THREE.CatmullRomCurve3(points);
+            const tubeGeom = new THREE.TubeGeometry(curve, activePath.length * 4, 0.22, 8, false);
+            const colorHex = currentAlgo === 'safest' ? 0x00e676 : (currentAlgo === 'science' ? 0xd500f9 : 0xff9100);
+            routeLine = new THREE.Mesh(tubeGeom, new THREE.MeshBasicMaterial({ color: colorHex }));
+            scene.add(routeLine);
+
+            if (roverMarker) roverMarker.position.copy(points[0]);
+        }
+
+        function evaluateRouteTelemetry() {
+            if (activePath.length < 2) return;
+
+            let totalDistKm = 0, maxSlope = 0, sumHazard = 0, maxHazard = 0;
+            let totalRadDose = 0, totalTimeHrs = 0, sciencePoints = 0, duneCrossings = 0, avgDustIndex = 0;
+            const baseSpeedKmh = (mobilityMode === 'rover') ? 9.5 : 3.2;
+
+            for (let i = 0; i < activePath.length; i++) {
+                const pt = activePath[i];
+                const cell = terrainData[pt.z][pt.x];
+                const haz = evaluateCellHazard(cell);
+
+                let segDist = 1.0;
+                if (i > 0) {
+                    const prev = activePath[i - 1];
+                    segDist = Math.sqrt((pt.x - prev.x) ** 2 + (pt.z - prev.z) ** 2);
+                    totalDistKm += segDist;
+                }
+
+                const terrainSlowdown = Math.max(0.32, 1.0 - (cell.slope / 45) - (cell.isBagnoldDune ? 0.35 : 0));
+                const segTime = segDist / (baseSpeedKmh * terrainSlowdown);
+                totalTimeHrs += segTime;
+
+                if (cell.slope > maxSlope) maxSlope = cell.slope;
+                if (cell.isBagnoldDune) duneCrossings++;
+                sumHazard += haz.total;
+                avgDustIndex += cell.dustIndex;
+                if (haz.total > maxHazard) maxHazard = haz.total;
+                totalRadDose += haz.radDoseRate * segTime;
+                sciencePoints += Math.round(cell.science * 0.45);
+            }
+
+            avgDustIndex /= activePath.length;
+            const avgHazard = sumHazard / activePath.length;
+            const overallRiskScore = Math.min(99, Math.round(avgHazard * 0.65 + maxHazard * 0.35));
+
+            const o2RatePerHr = (mobilityMode === 'walk') ? 9.2 : 3.8;
+            const batRatePerKm = (mobilityMode === 'rover') ? 1.35 : 0.80;
+            const dustBatteryPenalty = avgDustIndex * (weatherMode === 'storm' ? 22 : 10);
+            const o2Used = Math.min(100, Math.round(totalTimeHrs * o2RatePerHr));
+            const batUsed = Math.min(100, Math.round(totalDistKm * batRatePerKm + (maxSlope * 0.5) + dustBatteryPenalty));
+
+            document.getElementById('stat-pressure').innerText = (weatherMode === 'storm')
+                ? '895 Pa (Perihelion ΔP ±65 Pa Tide)'
+                : '745 Pa (Aphelion ΔP ±22 Pa Nominal)';
+            document.getElementById('stat-dist').innerText = `${totalDistKm.toFixed(1)} km / ${totalTimeHrs.toFixed(1)} hrs`;
+            document.getElementById('stat-o2').innerText = `${o2Used}%`;
+            document.getElementById('bar-o2').style.width = `${o2Used}%`;
+            document.getElementById('stat-bat').innerText = `${batUsed}% (DCI: ${avgDustIndex.toFixed(2)})`;
+            document.getElementById('bar-bat').style.width = `${batUsed}%`;
+            document.getElementById('stat-rad').innerText = `${totalRadDose.toFixed(2)} mSv`;
+            document.getElementById('bar-rad').style.width = `${Math.min(100, Math.round((totalRadDose / 2.5) * 100))}%`;
+
+            const sandLabel = duneCrossings > 0 ? `${duneCrossings}km SAND TRAP` : 'BEDROCK OK';
+            document.getElementById('stat-slope').innerText = `${maxSlope.toFixed(1)}° / ${sandLabel}`;
+            document.getElementById('bar-slope').style.width = `${Math.min(100, Math.round((maxSlope / 30) * 100))}%`;
+            document.getElementById('stat-sci').innerText = `${sciencePoints} pts`;
+
+            const dangerBox = document.getElementById('danger-box');
+            const scoreText = document.getElementById('danger-score-text');
+            const reasonText = document.getElementById('danger-reason-text');
+
+            let level = 'LOW', color = 'var(--green)', bg = 'rgba(0, 230, 118, 0.1)';
+            let reason = `AI4Mars & TES confirm high-inertia bedrock (>320 TI), low dust cover, and safe slope (${maxSlope.toFixed(1)}°).`;
+
+            if (overallRiskScore >= 68 || o2Used >= 90 || duneCrossings > 2) {
+                level = 'CRITICAL'; color = 'var(--red)'; bg = 'rgba(255, 42, 85, 0.15)';
+                reason = `CRITICAL: Crosses ${duneCrossings}km low-inertia Bagnold sand traps (<130 TI, Putzig 2005) or steep ${maxSlope.toFixed(1)}° slope!`;
+            } else if (overallRiskScore >= 45 || o2Used >= 70) {
+                level = 'HIGH'; color = 'var(--amber)'; bg = 'rgba(255, 145, 0, 0.14)';
+                reason = `Elevated hazard: Hesperian Mt. Sharp switchbacks (${maxSlope.toFixed(1)}°) & high TES dust cover.`;
+            } else if (overallRiskScore >= 26) {
+                level = 'MODERATE'; color = '#ffea00'; bg = 'rgba(255, 234, 0, 0.1)';
+                reason = `Moderate gradient across ancient Gale paleolake shoreline (-3,950m) & Boxwork mineral veins.`;
+            }
+
+            dangerBox.style.borderColor = color;
+            dangerBox.style.background = bg;
+            scoreText.style.color = color;
+            scoreText.innerText = `${level} (${overallRiskScore}/100)`;
+            reasonText.innerText = reason;
+
+            // Also update 2D Planner summary if visible
+            const pDist = document.getElementById('planner-dist-text');
+            const pRisk = document.getElementById('planner-risk-text');
+            if (pDist && pRisk) {
+                pDist.innerText = `${totalDistKm.toFixed(1)} km`;
+                pRisk.innerText = `${level} (${overallRiskScore}/100)`;
+                pRisk.style.color = color;
+            }
+        }
+
+        function drawElevationProfile() {
+            const canvas = document.getElementById('elevation-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+            if (activePath.length < 2) return;
+
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            for (let i = 0; i < activePath.length; i++) {
+                const pt = activePath[i];
+                const cell = terrainData[pt.z][pt.x];
+                const x = (i / (activePath.length - 1)) * w;
+                const normY = (cell.elevation + 4600) / 5800;
+                const y = h - Math.max(6, Math.min(h - 6, normY * (h - 14) + 6));
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(w, h);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(0, 229, 255, 0.28)';
+            ctx.fill();
+        }
+
+        function setLayer(layerName) {
+            currentLayer = layerName;
+            ['optical', 'geology', 'topo', 'thermal', 'dust', 'science'].forEach(l => {
+                const el = document.getElementById('layer-' + l);
+                if (el) el.classList.toggle('active', l === layerName);
+            });
+            document.getElementById('layer-citation-box').innerHTML = LAYER_CITATIONS[layerName] || '';
+            updateTerrainLayerColors();
+        }
+
+        function setCameraView(viewMode) {
+            document.getElementById('cam-3d-btn').classList.toggle('active', viewMode === '3d');
+            document.getElementById('cam-top-btn').classList.toggle('active', viewMode === 'top');
+            if (viewMode === 'top') {
+                camera.position.set(0, 92, 0.01);
+                controls.target.set(0, 0, 0);
+            } else {
+                camera.position.set(0, 52, 58);
+                controls.target.set(0, 0, 0);
+            }
+            controls.update();
+        }
+
+        function setMobility(mode) {
+            mobilityMode = mode;
+            document.getElementById('mob-rover').classList.toggle('active', mode === 'rover');
+            document.getElementById('mob-walk').classList.toggle('active', mode === 'walk');
+            updateTerrainLayerColors();
+            runPathfinder(currentAlgo);
+        }
+
+        function setWeather(wx) {
+            weatherMode = wx;
+            document.getElementById('wx-calm').classList.toggle('active', wx === 'calm');
+            document.getElementById('wx-storm').classList.toggle('active', wx === 'storm');
+            updateTerrainLayerColors();
+            runPathfinder(currentAlgo);
+        }
+
+        function animateRoverAlongPath() {
+            if (activePath.length < 2) return;
+            if (animFrameId) clearInterval(animFrameId);
+            simIndex = 0;
+            animFrameId = setInterval(() => {
+                if (simIndex >= activePath.length) {
+                    clearInterval(animFrameId);
+                    document.getElementById('sim-progress-label').innerText = 'ARRIVED';
+                    return;
+                }
+                const pt = activePath[simIndex];
+                const worldPos = gridToWorld(pt.x, pt.z);
+                roverMarker.position.set(worldPos.x, worldPos.y + 0.65, worldPos.z);
+                simIndex++;
+            }, 90);
+        }
+
+        function onTerrainMouseMove(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(terrainMesh);
+            if (intersects.length > 0) {
+                const pt = intersects[0].point;
+                const gx = Math.max(0, Math.min(GRID_SIZE - 1, Math.round(pt.x + (GRID_SIZE - 1) / 2)));
+                const gz = Math.max(0, Math.min(GRID_SIZE - 1, Math.round(pt.z + (GRID_SIZE - 1) / 2)));
+                const cell = terrainData[gz][gx];
+                const haz = evaluateCellHazard(cell);
+                document.getElementById('hover-readout').innerText =
+                    `[${gx},${gz}] | ELEV: ${Math.round(cell.elevation)}m | UNIT: ${cell.geoUnit} | AI4MARS: ${cell.ai4marsClass} | TES TI: ${Math.round(cell.thermal)} | DUST DCI: ${cell.dustIndex.toFixed(2)} | RISK: ${Math.round(haz.total)}/100`;
+            }
+        }
+
+        let pointerDownPos = { x: 0, y: 0 };
+        function onTerrainPointerDown(event) {
+            pointerDownPos = { x: event.clientX, y: event.clientY };
+            renderer.domElement.addEventListener('pointerup', onTerrainPointerUp, { once: true });
+        }
+
+        function onTerrainPointerUp(event) {
+            if (Math.hypot(event.clientX - pointerDownPos.x, event.clientY - pointerDownPos.y) > 5) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(terrainMesh);
+            if (intersects.length > 0) {
+                const pt = intersects[0].point;
+                const gx = Math.max(0, Math.min(GRID_SIZE - 1, Math.round(pt.x + (GRID_SIZE - 1) / 2)));
+                const gz = Math.max(0, Math.min(GRID_SIZE - 1, Math.round(pt.z + (GRID_SIZE - 1) / 2)));
+                currentGoalNode = { x: gx, z: gz, name: `Custom EVA Target [${gx},${gz}]` };
+                runPathfinder('safest');
+            }
+        }
+
+        function onWindowResize() {
+            if (!renderer || !camera) return;
+            const container = document.getElementById('gale-canvas-container');
+            if (container.clientWidth === 0 || container.clientHeight === 0) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animateThreeJS() {
+            requestAnimationFrame(animateThreeJS);
+            if (currentAppMode === 'gale' && controls && renderer && scene && camera) {
+                controls.update();
+                renderer.render(scene, camera);
+                if (window.galeSandboxLabels) {
+                    const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+                    window.galeSandboxLabels.forEach(item => {
+                        const pos = gridToWorld(item.lm.x, item.lm.z);
+                        pos.y += 2.2;
+                        pos.project(camera);
+                        if (pos.z > 1 || pos.z < -1) { item.el.style.display = 'none'; return; }
+                        const sx = (pos.x * 0.5 + 0.5) * w;
+                        const sy = (-pos.y * 0.5 + 0.5) * h;
+                        item.el.style.display = (sx > 290 && sx < w - 320 && sy > 40 && sy < h - 40) ? 'block' : 'none';
+                        item.el.style.left = `${sx.toFixed(1)}px`;
+                        item.el.style.top = `${sy.toFixed(1)}px`;
+                    });
+                }
+            }
+        }
+
+        /* =========================================================================
+           PART 5: VIEW 3 - 3D THIRD-PERSON ASTRONAUT ROVER SIMULATOR (WASD + 2D MAP)
+           ========================================================================= */
+        // Expanded 8x World Scale for 3D Driving (70km * 8 = 560x560 3D World Units!)
+        // Ensures realistic long-distance exploration instead of reaching goal in 5 seconds.
+        const DRIVE_SCALE = 8.0;
+        const DRIVE_WORLD_SIZE = GRID_SIZE * DRIVE_SCALE;
+
+        let driveScene, driveCamera, driveRenderer, driveTerrainMesh, driveRouteMesh, goalRingMesh;
+        let playerVehicleGroup, wheelMeshes = [];
+        let plannerPickMode = "start";
+        let arHazardElements = [];
+        let arLandmarkElements = [];
+        let hasDeployedOnce = false;
+        let isArriving = false;
+
+        // 13 Directional Hazard Sectors in front & sides of the Rover (scaled for expanded 3D world)
+        const AR_HAZARD_SECTORS = [
+            // Inner/Near Arc (7 directions: Left -75° to Right +75°)
+            { label: "LEFT -75°",      angleDeg:  75, distGrid: 0.55 },
+            { label: "FRONT-L -50°",   angleDeg:  50, distGrid: 0.60 },
+            { label: "FRONT-L -25°",   angleDeg:  25, distGrid: 0.65 },
+            { label: "AHEAD 0°",       angleDeg:   0, distGrid: 0.70 },
+            { label: "FRONT-R +25°",   angleDeg: -25, distGrid: 0.65 },
+            { label: "FRONT-R +50°",   angleDeg: -50, distGrid: 0.60 },
+            { label: "RIGHT +75°",     angleDeg: -75, distGrid: 0.55 },
+            // Outer/Mid-Far Arc (6 directions: Left-Front -60° to Right-Front +60°)
+            { label: "FAR-L -60°",     angleDeg:  60, distGrid: 1.35 },
+            { label: "FAR-L -35°",     angleDeg:  35, distGrid: 1.45 },
+            { label: "FAR-L -12°",     angleDeg:  12, distGrid: 1.55 },
+            { label: "FAR-R +12°",     angleDeg: -12, distGrid: 1.55 },
+            { label: "FAR-R +35°",     angleDeg: -35, distGrid: 1.45 },
+            { label: "FAR-R +60°",     angleDeg: -60, distGrid: 1.35 }
+        ];
+
+        const roverState = {
+            gx: 18.0,
+            gz: 14.0,
+            heading: 0.65,
+            speed: 0.0,
+            keys: { w: false, a: false, s: false, d: false }
+        };
+
+        function driveGridToWorldX(gx) {
+            return (gx - (GRID_SIZE - 1) / 2) * DRIVE_SCALE;
+        }
+        function driveGridToWorldZ(gz) {
+            return (gz - (GRID_SIZE - 1) / 2) * DRIVE_SCALE;
+        }
+
+        // High-frequency geomorphological micro-relief (craters, wind-carved ridges, etched canyons)
+        function microCraterRelief(gx, gz) {
+            const r1 = 1.0 - Math.abs(Math.sin(gx * 1.15 + gz * 0.85));
+            const r2 = 1.0 - Math.abs(Math.cos(gx * 2.45 - gz * 1.95));
+            const r3 = Math.sin(gx * 5.2 + gz * 4.3) * 0.5 + Math.cos(gx * 8.1 - gz * 7.4) * 0.5;
+
+            const cellX = Math.floor(gx / 2.2);
+            const cellZ = Math.floor(gz / 2.2);
+            const seed = Math.abs(Math.sin(cellX * 127.1 + cellZ * 311.7) * 43758.5453) % 1;
+            let craterBowl = 0;
+            if (seed > 0.28) {
+                const cx = (cellX + 0.5) * 2.2 + (seed - 0.5) * 0.7;
+                const cz = (cellZ + 0.5) * 2.2 + ((seed * 7.3) % 1 - 0.5) * 0.7;
+                const rad = 0.42 + (seed * 0.55);
+                const d = Math.hypot(gx - cx, gz - cz) / rad;
+                if (d < 1.0) {
+                    craterBowl = -0.85 * (1.0 - d * d);
+                } else if (d < 1.35) {
+                    craterBowl = 0.38 * Math.exp(-Math.pow((d - 1.05) / 0.18, 2));
+                }
+            }
+
+            return (r1 * r1 * 0.75 + r2 * 0.35 + r3 * 0.12 + craterBowl);
+        }
+
+        function getDetailedDriveY(gx, gz) {
+            // Scale vertical relief proportionally to DRIVE_SCALE for realistic mountain & canyon grandeur
+            return getInterpolatedVisualY(gx, gz) * 3.8 + microCraterRelief(gx, gz);
+        }
+
+        // Generate Ultra-Crisp High-Res Procedural Martian Regolith & Rock Detail Texture
+        function createHighResMarsDetailTexture() {
+            const canvas = document.createElement("canvas");
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext("2d");
+            const imgData = ctx.createImageData(512, 512);
+            const data = imgData.data;
+
+            for (let y = 0; y < 512; y++) {
+                for (let x = 0; x < 512; x++) {
+                    const idx = (y * 512 + x) * 4;
+                    // Wind-scoured aeolian ripples + fine regolith grain
+                    const ripple = Math.sin(x * 0.18 + Math.sin(y * 0.05) * 3.0) * 14;
+                    const grain = (Math.sin(x * 12.9898 + y * 78.233) * 43758.5453 % 1) * 22;
+                    const val = Math.max(150, Math.min(255, Math.round(212 + ripple + grain)));
+                    data[idx] = val;
+                    data[idx + 1] = Math.round(val * 0.94);
+                    data[idx + 2] = Math.round(val * 0.88);
+                    data[idx + 3] = 255;
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(190, 190);
+            return tex;
+        }
+
+        function initDriveSimulator() {
+            const container = document.getElementById("drive-canvas-container");
+            driveScene = new THREE.Scene();
+            driveScene.background = new THREE.Color(0x030408);
+            driveScene.fog = new THREE.FogExp2(0x28140c, 0.0028);
+
+            driveCamera = new THREE.PerspectiveCamera(52, container.clientWidth / container.clientHeight, 0.1, 900);
+            driveRenderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            driveRenderer.setSize(container.clientWidth, container.clientHeight);
+            driveRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            driveRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+            driveRenderer.toneMappingExposure = 1.08;
+            container.appendChild(driveRenderer.domElement);
+
+            // High-Def Starfield Dome
+            const starGeom = new THREE.BufferGeometry();
+            const starVerts = [];
+            for (let i = 0; i < 2400; i++) {
+                const r = 520 + Math.random() * 120;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI * 0.47;
+                starVerts.push(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    r * Math.cos(phi) + 18,
+                    r * Math.sin(phi) * Math.sin(theta)
+                );
+            }
+            starGeom.setAttribute("position", new THREE.Float32BufferAttribute(starVerts, 3));
+            driveScene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({ color: 0xfff4e8, size: 1.1 })));
+
+            // Low Grazing Sun Angle for Crisp Crater & Ridge Shadows (matching Photo 2)
+            const hemiLight = new THREE.HemisphereLight(0xffd2b3, 0x1a0c08, 0.44);
+            driveScene.add(hemiLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffb884, 1.65);
+            sunLight.position.set(320, 85, -180);
+            driveScene.add(sunLight);
+
+            // Seamless Extended Martian Horizon Surface (3.2x wider than Gale Crater = 1792x1792 world units!)
+            // So looking beyond Gale Crater's rim shows continuous Martian highlands/plains instead of empty space,
+            // while the Astronaut & Rover remain strictly bounded inside the 70x70km Gale Crater zone!
+            const EXTENDED_WORLD_SIZE = DRIVE_WORLD_SIZE * 3.2;
+            const SUBDIV = 360;
+            const geom = new THREE.PlaneGeometry(EXTENDED_WORLD_SIZE, EXTENDED_WORLD_SIZE, SUBDIV, SUBDIV);
+            geom.rotateX(-Math.PI / 2);
+            const posAttr = geom.attributes.position;
+            const colors = new Float32Array(posAttr.count * 3);
+
+            for (let i = 0; i < posAttr.count; i++) {
+                const vx = posAttr.getX(i);
+                const vz = posAttr.getZ(i);
+                // Unclamped grid coordinates for seamless exterior Martian terrain generation
+                const rawGx = (vx / DRIVE_SCALE) + (GRID_SIZE - 1) / 2;
+                const rawGz = (vz / DRIVE_SCALE) + (GRID_SIZE - 1) / 2;
+                const gx = Math.max(0, Math.min(GRID_SIZE - 1, rawGx));
+                const gz = Math.max(0, Math.min(GRID_SIZE - 1, rawGz));
+
+                // Smoothly continue Martian highland plateaus, craters & ridges outside Gale Crater (rawGx < 0 or > 69)
+                let wy = getDetailedDriveY(gx, gz);
+                if (rawGx < 0 || rawGx > GRID_SIZE - 1 || rawGz < 0 || rawGz > GRID_SIZE - 1) {
+                    const outDist = Math.hypot(
+                        rawGx < 0 ? -rawGx : (rawGx > GRID_SIZE - 1 ? rawGx - (GRID_SIZE - 1) : 0),
+                        rawGz < 0 ? -rawGz : (rawGz > GRID_SIZE - 1 ? rawGz - (GRID_SIZE - 1) : 0)
+                    );
+                    const baseEdgeY = getInterpolatedVisualY(gx, gz) * 3.8;
+                    const outerUndulation = Math.sin(rawGx * 0.14 + rawGz * 0.11) * 2.2 + Math.cos(rawGx * 0.27 - rawGz * 0.21) * 1.4;
+                    wy = baseEdgeY - Math.min(6.5, outDist * 0.08) + outerUndulation + microCraterRelief(Math.abs(rawGx), Math.abs(rawGz));
+                }
+                posAttr.setY(i, wy);
+
+                const ix = Math.min(GRID_SIZE - 1, Math.round(gx));
+                const iz = Math.min(GRID_SIZE - 1, Math.round(gz));
+                const cell = terrainData[iz][ix];
+
+                const microTex = Math.sin(gx * 3.1 + gz * 2.3) * 0.045 + Math.cos(gx * 7.5 - gz * 6.2) * 0.03;
+                const altFactor = Math.max(0, Math.min(1, (cell.elevation + 4500) / 5500));
+                let rgb = lerpColor(
+                    [0.58 + microTex, 0.31 + microTex * 0.6, 0.20 + microTex * 0.4],
+                    [0.83 + microTex, 0.50 + microTex * 0.7, 0.34 + microTex * 0.5],
+                    altFactor
+                );
+
+                if (cell.isBagnoldDune) {
+                    rgb = [0.26 + microTex, 0.18 + microTex * 0.5, 0.15];
+                }
+                colors[i * 3]     = Math.max(0, Math.min(1, rgb[0]));
+                colors[i * 3 + 1] = Math.max(0, Math.min(1, rgb[1]));
+                colors[i * 3 + 2] = Math.max(0, Math.min(1, rgb[2]));
+            }
+            geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+            geom.computeVertexNormals();
+
+            const detailTex = createHighResMarsDetailTexture();
+            driveTerrainMesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                map: detailTex,
+                bumpMap: detailTex,
+                bumpScale: 0.08,
+                roughness: 0.90,
+                metalness: 0.04
+            }));
+            driveScene.add(driveTerrainMesh);
+
+            // Scatter 650 Angular Martian Outcrops & Boulders across the expanded 560x560 world
+            const rockGeom = new THREE.DodecahedronGeometry(0.32, 0);
+            const rockMat = new THREE.MeshStandardMaterial({ color: 0x6e3a26, roughness: 0.95, flatShading: true });
+            for (let i = 0; i < 650; i++) {
+                const rx = 2 + Math.random() * (GRID_SIZE - 4);
+                const rz = 2 + Math.random() * (GRID_SIZE - 4);
+                const ry = getDetailedDriveY(rx, rz);
+                const rock = new THREE.Mesh(rockGeom, rockMat);
+                const s = 0.6 + Math.random() * 2.2;
+                rock.scale.set(s * 1.25, s * 0.55, s);
+                rock.position.set(driveGridToWorldX(rx), ry + 0.02, driveGridToWorldZ(rz));
+                rock.rotation.set(Math.random() * 0.4, Math.random() * Math.PI, Math.random() * 0.4);
+                driveScene.add(rock);
+            }
+
+            // Create 3D Beacon Towers & Floating Name Labels for all 9 NASA Gale Crater Landmarks!
+            const lmOverlay = document.getElementById("ar-landmark-overlay");
+            lmOverlay.innerHTML = "";
+            arLandmarkElements = [];
+
+            GALE_LANDMARKS.forEach(lm => {
+                const wx = driveGridToWorldX(lm.x);
+                const wz = driveGridToWorldZ(lm.z);
+                const wy = getDetailedDriveY(lm.x, lm.z);
+                const hexColor = parseInt(lm.color.replace("#", "0x"));
+
+                const poleMat = new THREE.MeshBasicMaterial({
+                    color: hexColor,
+                    transparent: true,
+                    opacity: 0.28,
+                    depthWrite: false
+                });
+                const pole = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.14, 0.14, 5.5, 12),
+                    poleMat
+                );
+                pole.position.set(wx, wy + 2.75, wz);
+                driveScene.add(pole);
+
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: hexColor,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.38,
+                    depthWrite: false
+                });
+                const ringGeom = new THREE.RingGeometry(1.1, 1.75, 28);
+                ringGeom.rotateX(-Math.PI / 2);
+                const ring = new THREE.Mesh(ringGeom, ringMat);
+                ring.position.set(wx, wy + 0.10, wz);
+                driveScene.add(ring);
+
+                const tag = document.createElement("div");
+                tag.className = "ar-landmark-pin";
+                tag.style.borderColor = lm.color;
+                tag.innerHTML = `📍 ${lm.name} <span class="lm-dist"></span>`;
+                lmOverlay.appendChild(tag);
+                arLandmarkElements.push({ lm, el: tag, poleMat, ringMat });
+            });
+
+            // Destination Goal Glowing Holographic Finish Gate Ring
+            const goalGeom = new THREE.RingGeometry(1.8, 2.8, 32);
+            goalGeom.rotateX(-Math.PI / 2);
+            goalRingMesh = new THREE.Mesh(goalGeom, new THREE.MeshBasicMaterial({ color: 0x00e676, side: THREE.DoubleSide }));
+            driveScene.add(goalRingMesh);
+
+            buildAstronautRoverModel();
+
+            // Create 13 DOM Elements for 3D AR Floating Directional Hazard Markers
+            const overlay = document.getElementById("ar-hazard-overlay");
+            overlay.innerHTML = "";
+            arHazardElements = AR_HAZARD_SECTORS.map(sec => {
+                const el = document.createElement("div");
+                el.className = "ar-hazard-pin";
+                el.innerHTML = `<div class="ar-pct">--%</div><div class="ar-dir">${sec.label}</div><div class="ar-cause"></div>`;
+                overlay.appendChild(el);
+                return el;
+            });
+
+            const plannerCanvas = document.getElementById("planner-2d-canvas");
+            plannerCanvas.addEventListener("mousedown", on2DMapClick);
+
+            window.addEventListener("keydown", onDriveKeyDown);
+            window.addEventListener("keyup", onDriveKeyUp);
+            window.addEventListener("resize", onDriveResize);
+
+            recomputeDriveRoute();
+            draw2DPlannerMap();
+            animateDriveLoop();
+        }
+
+        // Generate NASA Meatball Logo + USA Flag + Suit Seam Texture for Astronaut PLSS & Suit
+        function createNASASuitTexture() {
+            const c = document.createElement("canvas");
+            c.width = 256;
+            c.height = 256;
+            const ctx = c.getContext("2d");
+
+            // White thermal micrometeoroid garment fabric with subtle quilting
+            ctx.fillStyle = "#f2f5fa";
+            ctx.fillRect(0, 0, 256, 256);
+            ctx.strokeStyle = "#d5dde8";
+            ctx.lineWidth = 2;
+            for (let y = 16; y < 256; y += 28) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke();
+            }
+
+            // Dark grey technical harness panel
+            ctx.fillStyle = "#2b3542";
+            ctx.fillRect(28, 30, 200, 42);
+
+            // NASA Blue Meatball Badge
+            ctx.fillStyle = "#0b3d91";
+            ctx.beginPath();
+            ctx.arc(65, 51, 16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fc3d21";
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = "#fc3d21";
+            ctx.beginPath();
+            ctx.moveTo(46, 56); ctx.lineTo(84, 44); ctx.stroke();
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 9px sans-serif";
+            ctx.fillText("NASA", 52, 54);
+
+            // Red EVA Safety Stripes
+            ctx.fillStyle = "#d82b2b";
+            ctx.fillRect(24, 150, 208, 12);
+
+            // Oxygen / Telemetry Status LEDs on PLSS Backpack
+            ctx.fillStyle = "#00e676";
+            ctx.fillRect(150, 44, 16, 14);
+            ctx.fillStyle = "#00e5ff";
+            ctx.fillRect(174, 44, 24, 14);
+
+            return new THREE.CanvasTexture(c);
+        }
+
+        function buildAstronautRoverModel() {
+            playerVehicleGroup = new THREE.Group();
+            wheelMeshes = [];
+
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0xcfdbe6, metalness: 0.65, roughness: 0.30 });
+            const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x26303d, metalness: 0.55, roughness: 0.45 });
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xffb300, metalness: 0.75, roughness: 0.22 });
+            const tireMat = new THREE.MeshStandardMaterial({ color: 0x1c2026, roughness: 0.85 });
+
+            // ================= 1. DETAILED 6-WHEEL MARS ROVER CHASSIS =================
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.10, 0.92), metalMat);
+            chassis.position.y = 0.20;
+            playerVehicleGroup.add(chassis);
+
+            // Rocker-bogie suspension struts
+            const leftStrut = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.76), darkMetalMat);
+            leftStrut.position.set(-0.32, 0.16, 0);
+            playerVehicleGroup.add(leftStrut);
+            const rightStrut = leftStrut.clone();
+            rightStrut.position.x = 0.32;
+            playerVehicleGroup.add(rightStrut);
+
+            // Front steering console & dual control handlebars (so Astronaut grips the rover controls!)
+            const consolePost = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.48, 12), darkMetalMat);
+            consolePost.position.set(0, 0.46, -0.30);
+            consolePost.rotation.x = 0.22;
+            playerVehicleGroup.add(consolePost);
+
+            const dashScreen = new THREE.Mesh(
+                new THREE.BoxGeometry(0.28, 0.12, 0.04),
+                new THREE.MeshBasicMaterial({ color: 0x00e5ff })
+            );
+            dashScreen.position.set(0, 0.68, -0.25);
+            dashScreen.rotation.x = -0.45;
+            playerVehicleGroup.add(dashScreen);
+
+            const handleBar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.42, 10), darkMetalMat);
+            handleBar.rotation.z = Math.PI / 2;
+            handleBar.position.set(0, 0.64, -0.21);
+            playerVehicleGroup.add(handleBar);
+
+            // Rear RTG Nuclear Power Source with cooling fins
+            const rtg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.28, 12), goldMat);
+            rtg.rotation.x = Math.PI / 2;
+            rtg.position.set(0, 0.28, 0.42);
+            playerVehicleGroup.add(rtg);
+
+            // 6 Sculpted Rover Wheels with Gold Hubs
+            const wheelGeom = new THREE.CylinderGeometry(0.135, 0.135, 0.11, 16);
+            wheelGeom.rotateZ(Math.PI / 2);
+            const hubGeom = new THREE.CylinderGeometry(0.06, 0.06, 0.12, 12);
+            hubGeom.rotateZ(Math.PI / 2);
+
+            const wheelOffsets = [
+                [-0.36, 0.135, -0.33], [0.36, 0.135, -0.33],
+                [-0.38, 0.135,  0.00], [0.38, 0.135,  0.00],
+                [-0.36, 0.135,  0.33], [0.36, 0.135,  0.33]
+            ];
+            wheelOffsets.forEach(off => {
+                const wheelGroup = new THREE.Group();
+                wheelGroup.position.set(off[0], off[1], off[2]);
+                wheelGroup.add(new THREE.Mesh(wheelGeom, tireMat));
+                wheelGroup.add(new THREE.Mesh(hubGeom, goldMat));
+                playerVehicleGroup.add(wheelGroup);
+                wheelMeshes.push(wheelGroup);
+            });
+
+            // ================= 2. REALISTIC 3D NASA EVA ASTRONAUT =================
+            const astronautGroup = new THREE.Group();
+            astronautGroup.position.set(0, 0.25, 0.02); // Standing on the rover deck
+
+            const suitTex = createNASASuitTexture();
+            const suitMat = new THREE.MeshStandardMaterial({
+                color: 0xf7f9fc,
+                map: suitTex,
+                roughness: 0.52,
+                metalness: 0.08
+            });
+            const whiteSuitMat = new THREE.MeshStandardMaterial({ color: 0xf2f5fa, roughness: 0.48, metalness: 0.08 });
+            const jointRingMat = new THREE.MeshStandardMaterial({ color: 0x8c9bae, metalness: 0.6, roughness: 0.35 });
+            const redStripeMat = new THREE.MeshStandardMaterial({ color: 0xd92626, roughness: 0.5 });
+            const bootMat = new THREE.MeshStandardMaterial({ color: 0x384250, roughness: 0.7, metalness: 0.25 });
+            const goldVisorMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.92, roughness: 0.08 });
+
+            // --- A. Boots, Ankles, Calves, Knees & Thighs ---
+            [-0.085, 0.085].forEach(lx => {
+                // Lunar/Martian Boot Sole & Toe
+                const boot = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.065, 0.16), bootMat);
+                boot.position.set(lx, 0.032, -0.02);
+                astronautGroup.add(boot);
+
+                // Lower Leg (Calf) with Red Commander Stripe
+                const calf = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.046, 0.18, 14), whiteSuitMat);
+                calf.position.set(lx, 0.15, 0);
+                astronautGroup.add(calf);
+
+                const legStripe = new THREE.Mesh(new THREE.CylinderGeometry(0.054, 0.054, 0.025, 14), redStripeMat);
+                legStripe.position.set(lx, 0.19, 0);
+                astronautGroup.add(legStripe);
+
+                // Articulated Knee Joint Sphere
+                const knee = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 12), jointRingMat);
+                knee.position.set(lx, 0.25, -0.01);
+                astronautGroup.add(knee);
+
+                // Upper Leg (Thigh)
+                const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.060, 0.052, 0.18, 14), whiteSuitMat);
+                thigh.position.set(lx, 0.34, 0);
+                astronautGroup.add(thigh);
+            });
+
+            // --- B. Pelvis / Waist Bearing & Hard Upper Torso (HUT) ---
+            const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.125, 0.09, 16), whiteSuitMat);
+            pelvis.position.set(0, 0.44, 0);
+            astronautGroup.add(pelvis);
+
+            const waistRing = new THREE.Mesh(new THREE.TorusGeometry(0.132, 0.014, 10, 24), jointRingMat);
+            waistRing.rotation.x = Math.PI / 2;
+            waistRing.position.set(0, 0.48, 0);
+            astronautGroup.add(waistRing);
+
+            // Sculpted Astronaut Torso
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.135, 0.30, 16), whiteSuitMat);
+            torso.scale.set(1.0, 1.0, 0.78);
+            torso.position.set(0, 0.63, 0);
+            astronautGroup.add(torso);
+
+            // Front Chest Display & Control Module (DCM)
+            const dcm = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.13, 0.06), whiteSuitMat);
+            dcm.position.set(0, 0.64, -0.11);
+            astronautGroup.add(dcm);
+
+            // Harness X-Straps across Torso (matching user reference image!)
+            const strap1 = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.32, 0.23), darkMetalMat);
+            strap1.rotation.z = 0.48;
+            strap1.position.set(0, 0.63, 0);
+            astronautGroup.add(strap1);
+
+            const strap2 = strap1.clone();
+            strap2.rotation.z = -0.48;
+            astronautGroup.add(strap2);
+
+            // --- C. PLSS Life Support Backpack (Detailed Back View for Third-Person Camera!) ---
+            const plssMain = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.34, 0.14), suitMat);
+            plssMain.position.set(0, 0.65, 0.13);
+            astronautGroup.add(plssMain);
+
+            // Top Dual Oxygen Tanks inside PLSS
+            [-0.065, 0.065].forEach(ox => {
+                const o2Tank = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.28, 14), whiteSuitMat);
+                o2Tank.position.set(ox, 0.66, 0.19);
+                astronautGroup.add(o2Tank);
+
+                const tankCap = new THREE.Mesh(new THREE.SphereGeometry(0.048, 12, 12), jointRingMat);
+                tankCap.position.set(ox, 0.80, 0.19);
+                astronautGroup.add(tankCap);
+            });
+
+            // UHF Communications Antenna & Strobe Light on Top of PLSS Backpack
+            const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.012, 0.22, 8), darkMetalMat);
+            antenna.position.set(0.10, 0.92, 0.14);
+            astronautGroup.add(antenna);
+
+            const beaconTip = new THREE.Mesh(
+                new THREE.SphereGeometry(0.022, 10, 10),
+                new THREE.MeshBasicMaterial({ color: 0x00e676 })
+            );
+            beaconTip.position.set(0.10, 1.03, 0.14);
+            astronautGroup.add(beaconTip);
+
+            // Life-Support Umbilical Hoses connecting PLSS to Suit Waist
+            [-0.12, 0.12].forEach(hx => {
+                const hose = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.014, 8, 16, Math.PI), darkMetalMat);
+                hose.rotation.y = Math.PI / 2;
+                hose.position.set(hx, 0.52, 0.08);
+                astronautGroup.add(hose);
+            });
+
+            // --- D. Articulated Shoulders, Upper Arms, Elbows, Forearms & Gloves Gripping Handlebars ---
+            [-1, 1].forEach(side => {
+                const sx = side * 0.175;
+                // Red Metallic Shoulder Bearing Ring
+                const shoulderRing = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.012, 10, 20), redStripeMat);
+                shoulderRing.rotation.y = Math.PI / 2;
+                shoulderRing.position.set(sx, 0.73, 0);
+                astronautGroup.add(shoulderRing);
+
+                const shoulderCap = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 12), whiteSuitMat);
+                shoulderCap.position.set(sx, 0.73, 0);
+                astronautGroup.add(shoulderCap);
+
+                // Upper Arm angled slightly forward
+                const upperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.040, 0.17, 12), whiteSuitMat);
+                upperArm.position.set(sx * 1.05, 0.65, -0.05);
+                upperArm.rotation.x = 0.55;
+                astronautGroup.add(upperArm);
+
+                // Elbow Joint Sphere
+                const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.042, 12, 12), jointRingMat);
+                elbow.position.set(sx * 1.05, 0.58, -0.10);
+                astronautGroup.add(elbow);
+
+                // Forearm reaching forward to the rover handlebar!
+                const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.040, 0.036, 0.18, 12), whiteSuitMat);
+                forearm.position.set(sx * 0.95, 0.52, -0.17);
+                forearm.rotation.x = 1.15;
+                forearm.rotation.z = side * 0.18;
+                astronautGroup.add(forearm);
+
+                // EVA Pressurized Glove gripping handlebar
+                const glove = new THREE.Mesh(new THREE.SphereGeometry(0.042, 12, 12), bootMat);
+                glove.position.set(sx * 0.85, 0.45, -0.24);
+                astronautGroup.add(glove);
+            });
+
+            // --- E. Neck Ring, Bubble Helmet, Gold Solar Visor & Helmet Spotlights ---
+            const neckRing = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.015, 10, 24), jointRingMat);
+            neckRing.rotation.x = Math.PI / 2;
+            neckRing.position.set(0, 0.79, 0);
+            astronautGroup.add(neckRing);
+
+            // Outer White Extravehicular Visor Assembly (LEVA) Shell
+            const helmetShell = new THREE.Mesh(new THREE.SphereGeometry(0.135, 24, 24), whiteSuitMat);
+            helmetShell.position.set(0, 0.91, 0);
+            astronautGroup.add(helmetShell);
+
+            // Reflective Gold Solar Visor Dome (front/sides)
+            const goldVisor = new THREE.Mesh(new THREE.SphereGeometry(0.126, 24, 24), goldVisorMat);
+            goldVisor.position.set(0, 0.91, -0.025);
+            astronautGroup.add(goldVisor);
+
+            // Sun Shield Visor Brow Trim
+            const visorTrim = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.035, 0.16), whiteSuitMat);
+            visorTrim.position.set(0, 0.99, -0.02);
+            astronautGroup.add(visorTrim);
+
+            // Side Helmet Camera & LED Lamps
+            [-0.135, 0.135].forEach(hx => {
+                const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.07, 10), darkMetalMat);
+                lamp.rotation.x = Math.PI / 2;
+                lamp.position.set(hx, 0.92, -0.02);
+                astronautGroup.add(lamp);
+            });
+
+            playerVehicleGroup.add(astronautGroup);
+            driveScene.add(playerVehicleGroup);
+        }
+
+        function setPlannerPickMode(mode) {
+            plannerPickMode = mode;
+            document.getElementById("pick-start-btn").classList.toggle("active", mode === "start");
+            document.getElementById("pick-end-btn").classList.toggle("active", mode === "end");
+            const ind = document.getElementById("click-mode-indicator");
+            ind.innerText = mode === "start" ? "CLICK MAP TO SET: START" : "CLICK MAP TO SET: DESTINATION";
+            ind.style.color = mode === "start" ? "var(--green)" : "var(--cyan)";
+        }
+
+        function applyPresetSelection(which) {
+            const sel = document.getElementById(which + "-preset-select");
+            const lm = GALE_LANDMARKS[parseInt(sel.value)];
+            if (!lm) return;
+            document.getElementById(which + "-gx").value = lm.x;
+            document.getElementById(which + "-gz").value = lm.z;
+            updateFromCoordInputs();
+        }
+
+        function updateFromCoordInputs() {
+            const sx = Math.max(0, Math.min(69, parseInt(document.getElementById("start-gx").value) || 18));
+            const sz = Math.max(0, Math.min(69, parseInt(document.getElementById("start-gz").value) || 14));
+            const ex = Math.max(0, Math.min(69, parseInt(document.getElementById("end-gx").value) || 29));
+            const ez = Math.max(0, Math.min(69, parseInt(document.getElementById("end-gz").value) || 31));
+
+            START_NODE = { x: sx, z: sz, name: `Start [${sx},${sz}]` };
+            currentGoalNode = { x: ex, z: ez, name: `Target [${ex},${ez}]` };
+
+            const sLL = gridToLatLon(sx, sz);
+            const eLL = gridToLatLon(ex, ez);
+            document.getElementById("start-latlon-readout").innerText = `${sLL.lat}°S, ${sLL.lon}°E`;
+            document.getElementById("end-latlon-readout").innerText = `${eLL.lat}°S, ${eLL.lon}°E`;
+
+            recomputeDriveRoute();
+            draw2DPlannerMap();
+        }
+
+        function on2DMapClick(event) {
+            const canvas = document.getElementById("planner-2d-canvas");
+            const rect = canvas.getBoundingClientRect();
+            const gx = Math.max(0, Math.min(69, Math.floor(((event.clientX - rect.left) / rect.width) * GRID_SIZE)));
+            const gz = Math.max(0, Math.min(69, Math.floor(((event.clientY - rect.top) / rect.height) * GRID_SIZE)));
+
+            if (plannerPickMode === "start") {
+                document.getElementById("start-gx").value = gx;
+                document.getElementById("start-gz").value = gz;
+                setPlannerPickMode("end");
+            } else {
+                document.getElementById("end-gx").value = gx;
+                document.getElementById("end-gz").value = gz;
+            }
+            updateFromCoordInputs();
+        }
+
+        let lastRoutedCell = { x: -1, z: -1 };
+
+        function recomputeDriveRoute(fromCurrentRoverPos = false) {
+            const originNode = fromCurrentRoverPos
+                ? { x: Math.max(0, Math.min(69, Math.round(roverState.gx))), z: Math.max(0, Math.min(69, Math.round(roverState.gz))), name: "Live Rover Pos" }
+                : START_NODE;
+
+            lastRoutedCell = { x: originNode.x, z: originNode.z };
+            activePath = computeAStarSegment(originNode, currentGoalNode, "safest");
+            evaluateRouteTelemetry();
+
+            if (!driveScene) return;
+            if (driveRouteMesh) {
+                driveScene.remove(driveRouteMesh);
+                driveRouteMesh.geometry.dispose();
+            }
+            if (activePath.length >= 2) {
+                const pts = activePath.map((p, idx) => {
+                    const px = (idx === 0 && fromCurrentRoverPos) ? roverState.gx : p.x;
+                    const pz = (idx === 0 && fromCurrentRoverPos) ? roverState.gz : p.z;
+                    const wy = getDetailedDriveY(px, pz);
+                    return new THREE.Vector3(
+                        driveGridToWorldX(px),
+                        wy + 0.18,
+                        driveGridToWorldZ(pz)
+                    );
+                });
+                const curve = new THREE.CatmullRomCurve3(pts);
+                const tubeGeom = new THREE.TubeGeometry(curve, activePath.length * 6, 0.10, 8, false);
+                driveRouteMesh = new THREE.Mesh(tubeGeom, new THREE.MeshBasicMaterial({
+                    color: 0x00e676,
+                    transparent: true,
+                    opacity: 0.36,
+                    depthWrite: false
+                }));
+                driveScene.add(driveRouteMesh);
+            }
+
+            if (goalRingMesh) {
+                const gy = getDetailedDriveY(currentGoalNode.x, currentGoalNode.z);
+                goalRingMesh.position.set(
+                    driveGridToWorldX(currentGoalNode.x),
+                    gy + 0.2,
+                    driveGridToWorldZ(currentGoalNode.z)
+                );
+            }
+        }
+
+        function render2DMapToCanvas(canvas, showLabels) {
+            if (!canvas || terrainData.length === 0) return;
+            const ctx = canvas.getContext("2d");
+            const w = canvas.width, h = canvas.height;
+            const cellW = w / GRID_SIZE, cellH = h / GRID_SIZE;
+
+            for (let z = 0; z < GRID_SIZE; z++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cell = terrainData[z][x];
+                    const alt = Math.max(0, Math.min(1, (cell.elevation + 4500) / 5500));
+                    let r = Math.round(95 + alt * 125);
+                    let g = Math.round(48 + alt * 75);
+                    let b = Math.round(34 + alt * 45);
+                    if (cell.isBagnoldDune) {
+                        r = 165; g = 32; b = 55;
+                    } else if (cell.isPaleoLakebed) {
+                        r = Math.round(r * 0.85); g = Math.round(g * 0.95); b = Math.round(b * 1.15);
+                    }
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.fillRect(x * cellW, z * cellH, Math.ceil(cellW), Math.ceil(cellH));
+                }
+            }
+
+            if (activePath.length >= 2) {
+                ctx.beginPath();
+                activePath.forEach((pt, idx) => {
+                    const px = (pt.x + 0.5) * cellW;
+                    const pz = (pt.z + 0.5) * cellH;
+                    if (idx === 0) ctx.moveTo(px, pz);
+                    else ctx.lineTo(px, pz);
+                });
+                ctx.strokeStyle = "#00e676";
+                ctx.lineWidth = showLabels ? 3 : 2;
+                ctx.stroke();
+            }
+
+            GALE_LANDMARKS.forEach(lm => {
+                const lx = (lm.x + 0.5) * cellW;
+                const lz = (lm.z + 0.5) * cellH;
+                ctx.fillStyle = lm.color;
+                ctx.beginPath();
+                ctx.arc(lx, lz, showLabels ? 4.5 : 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                if (showLabels) {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "bold 10px sans-serif";
+                    ctx.fillText(lm.short, lx + 6, lz + 3);
+                }
+            });
+
+            const sx = (START_NODE.x + 0.5) * cellW, sz = (START_NODE.z + 0.5) * cellH;
+            ctx.fillStyle = "#00e676";
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(sx, sz, showLabels ? 7 : 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            const ex = (currentGoalNode.x + 0.5) * cellW, ez = (currentGoalNode.z + 0.5) * cellH;
+            ctx.fillStyle = "#00e5ff";
+            ctx.beginPath();
+            ctx.arc(ex, ez, showLabels ? 7 : 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            const rx = (roverState.gx + 0.5) * cellW;
+            const rz = (roverState.gz + 0.5) * cellH;
+            ctx.save();
+            ctx.translate(rx, rz);
+            ctx.rotate(-roverState.heading);
+            ctx.fillStyle = "#ffea00";
+            ctx.beginPath();
+            ctx.moveTo(0, -6);
+            ctx.lineTo(4.5, 5);
+            ctx.lineTo(-4.5, 5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function draw2DPlannerMap() {
+            render2DMapToCanvas(document.getElementById("planner-2d-canvas"), true);
+            render2DMapToCanvas(document.getElementById("minimap-canvas"), false);
+        }
+
+        function open2DMapPlanner() {
+            document.getElementById("map-planner-overlay").style.display = "flex";
+            // Show the "↩ Return to 3D View (Resume)" button if user already deployed once
+            document.getElementById("resume-drive-btn").style.display = hasDeployedOnce ? "inline-block" : "none";
+            draw2DPlannerMap();
+        }
+
+        // Feature 1: Return / Resume button closes the 2D map without resetting rover position!
+        function resume3DRoverExploration() {
+            document.getElementById("map-planner-overlay").style.display = "none";
+            updateRover3DTransformAndHUD();
+        }
+
+        function launch3DRoverExploration() {
+            hasDeployedOnce = true;
+            isArriving = false;
+            document.getElementById("mission-complete-banner").style.display = "none";
+            document.getElementById("map-planner-overlay").style.display = "none";
+
+            roverState.gx = START_NODE.x;
+            roverState.gz = START_NODE.z;
+            roverState.speed = 0;
+
+            const nextPt = activePath.length > 1 ? activePath[1] : currentGoalNode;
+            const dx = nextPt.x - START_NODE.x;
+            const dz = nextPt.z - START_NODE.z;
+            roverState.heading = Math.atan2(-dx, -dz);
+
+            updateRover3DTransformAndHUD();
+        }
+
+        function onDriveKeyDown(e) {
+            if (currentAppMode !== "drive" || isArriving) return;
+            const k = e.key.toLowerCase();
+            if (k === "w" || e.key === "ArrowUp") { roverState.keys.w = true; document.getElementById("key-w").classList.add("pressed"); }
+            if (k === "s" || e.key === "ArrowDown") { roverState.keys.s = true; document.getElementById("key-s").classList.add("pressed"); }
+            if (k === "a" || e.key === "ArrowLeft") { roverState.keys.a = true; document.getElementById("key-a").classList.add("pressed"); }
+            if (k === "d" || e.key === "ArrowRight") { roverState.keys.d = true; document.getElementById("key-d").classList.add("pressed"); }
+        }
+
+        function onDriveKeyUp(e) {
+            const k = e.key.toLowerCase();
+            if (k === "w" || e.key === "ArrowUp") { roverState.keys.w = false; document.getElementById("key-w").classList.remove("pressed"); }
+            if (k === "s" || e.key === "ArrowDown") { roverState.keys.s = false; document.getElementById("key-s").classList.remove("pressed"); }
+            if (k === "a" || e.key === "ArrowLeft") { roverState.keys.a = false; document.getElementById("key-a").classList.remove("pressed"); }
+            if (k === "d" || e.key === "ArrowRight") { roverState.keys.d = false; document.getElementById("key-d").classList.remove("pressed"); }
+        }
+
+        // Project 13 Directional Hazard Sectors AND 9 NASA Landmark Name Tags onto the 3D Viewport
+        function updateDirectionalARHazards() {
+            if (!driveCamera || !driveRenderer || arHazardElements.length === 0) return;
+
+            const width = driveRenderer.domElement.clientWidth;
+            const height = driveRenderer.domElement.clientHeight;
+            if (width === 0 || height === 0) return;
+
+            driveCamera.updateMatrixWorld();
+
+            AR_HAZARD_SECTORS.forEach((sec, idx) => {
+                const el = arHazardElements[idx];
+                const worldAngle = roverState.heading + (sec.angleDeg * Math.PI / 180);
+
+                const sampleGx = Math.max(0, Math.min(GRID_SIZE - 1, roverState.gx - Math.sin(worldAngle) * sec.distGrid));
+                const sampleGz = Math.max(0, Math.min(GRID_SIZE - 1, roverState.gz - Math.cos(worldAngle) * sec.distGrid));
+
+                const ix = Math.min(GRID_SIZE - 1, Math.round(sampleGx));
+                const iz = Math.min(GRID_SIZE - 1, Math.round(sampleGz));
+                const cell = terrainData[iz][ix];
+                const haz = evaluateCellHazard(cell);
+
+                const hHere = getDetailedDriveY(roverState.gx, roverState.gz);
+                const hTarget = getDetailedDriveY(sampleGx, sampleGz);
+                const localGradBonus = Math.min(28, Math.abs(hTarget - hHere) * 6.5);
+                const pct = Math.min(99, Math.max(4, Math.round(haz.total + localGradBonus)));
+
+                const wx = driveGridToWorldX(sampleGx);
+                const wz = driveGridToWorldZ(sampleGz);
+                const wy = hTarget + 0.55;
+
+                const projVec = new THREE.Vector3(wx, wy, wz);
+                projVec.project(driveCamera);
+
+                if (projVec.z > 1.0 || projVec.z < -1.0) {
+                    el.style.display = "none";
+                    return;
+                }
+
+                const sx = (projVec.x * 0.5 + 0.5) * width;
+                const sy = (-projVec.y * 0.5 + 0.5) * height;
+
+                if (sx < 60 || sx > width - 60 || sy < 50 || sy > height - 70) {
+                    el.style.display = "none";
+                    return;
+                }
+
+                let color = "#00e676";
+                if (pct >= 65) color = "#ff2a55";
+                else if (pct >= 42) color = "#ff9100";
+                else if (pct >= 26) color = "#ffea00";
+
+                const causeEl = el.querySelector(".ar-cause");
+                if (pct >= 26) {
+                    const effSlopeDeg = Math.min(42, cell.slope + localGradBonus * 0.45);
+                    const weightedSlope = haz.slopeRisk * 0.40 + localGradBonus;
+                    const weightedSand  = haz.sandRisk * 0.30;
+                    const weightedDust  = haz.dustRisk * 0.15;
+                    const weightedRad   = haz.radRisk * 0.15;
+
+                    let mainCause = "";
+                    if (weightedSand >= weightedSlope && cell.thermal < 195) {
+                        mainCause = `⚠️ Sand Trap (${Math.round(cell.thermal)} TI)`;
+                    } else if (weightedSlope >= weightedDust && weightedSlope >= weightedRad && effSlopeDeg >= 11) {
+                        mainCause = effSlopeDeg > 16
+                            ? `⚠️ Steep Slope (${effSlopeDeg.toFixed(0)}°)`
+                            : `⚠️ Crater Rim (${effSlopeDeg.toFixed(0)}°)`;
+                    } else if (cell.dustIndex >= 0.52) {
+                        mainCause = `⚠️ Thick Dust (DCI ${cell.dustIndex.toFixed(2)})`;
+                    } else if (cell.elevation > -2600) {
+                        mainCause = `⚠️ High RAD (${haz.radDoseRate.toFixed(2)} mSv/h)`;
+                    } else {
+                        mainCause = `⚠️ Rough Rocks (${effSlopeDeg.toFixed(0)}°)`;
+                    }
+                    causeEl.innerText = mainCause;
+                    causeEl.style.display = "block";
+                    causeEl.style.color = color;
+                } else {
+                    causeEl.style.display = "none";
+                }
+
+                el.style.display = "block";
+                el.style.left = `${sx.toFixed(1)}px`;
+                el.style.top = `${sy.toFixed(1)}px`;
+                el.style.borderColor = color;
+                el.style.color = color;
+                el.querySelector(".ar-pct").innerText = `${pct}%`;
+            });
+
+            // Feature 4: Project 3D Landmark Name Tags & dynamically fade beacon cylinders near the Astronaut!
+            arLandmarkElements.forEach(item => {
+                const lm = item.lm;
+                const el = item.el;
+                const distKm = Math.hypot(lm.x - roverState.gx, lm.z - roverState.gz);
+
+                // Fade the 3D cylinder pillar when astronaut is close (< 4 km) so it never blocks the camera view
+                if (item.poleMat && item.ringMat) {
+                    const fade = distKm < 1.8 ? 0.08 : (distKm < 4.5 ? 0.16 : 0.30);
+                    item.poleMat.opacity = fade;
+                    item.ringMat.opacity = Math.min(0.42, fade + 0.10);
+                }
+
+                const wx = driveGridToWorldX(lm.x);
+                const wz = driveGridToWorldZ(lm.z);
+                const wy = getDetailedDriveY(lm.x, lm.z) + 6.8;
+
+                const proj = new THREE.Vector3(wx, wy, wz);
+                proj.project(driveCamera);
+
+                if (proj.z > 1.0 || proj.z < -1.0 || distKm > 38) {
+                    el.style.display = "none";
+                    return;
+                }
+
+                const sx = (proj.x * 0.5 + 0.5) * width;
+                const sy = (-proj.y * 0.5 + 0.5) * height;
+
+                if (sx < 80 || sx > width - 80 || sy < 45 || sy > height - 85) {
+                    el.style.display = "none";
+                    return;
+                }
+
+                el.style.display = "block";
+                el.style.left = `${sx.toFixed(1)}px`;
+                el.style.top = `${sy.toFixed(1)}px`;
+                el.querySelector(".lm-dist").innerText = `(${distKm.toFixed(1)} km)`;
+            });
+        }
+
+        function updateRover3DTransformAndHUD() {
+            if (!playerVehicleGroup) return;
+
+            const wy = getDetailedDriveY(roverState.gx, roverState.gz);
+            const wx = driveGridToWorldX(roverState.gx);
+            const wz = driveGridToWorldZ(roverState.gz);
+
+            playerVehicleGroup.position.set(wx, wy, wz);
+            playerVehicleGroup.rotation.y = roverState.heading;
+
+            const camDist = 2.15;
+            const camHeight = 1.22;
+            const camX = wx + Math.sin(roverState.heading) * camDist;
+            const camZ = wz + Math.cos(roverState.heading) * camDist;
+            const camGx = (camX / DRIVE_SCALE) + (GRID_SIZE - 1) / 2;
+            const camGz = (camZ / DRIVE_SCALE) + (GRID_SIZE - 1) / 2;
+            const camTerrainY = getDetailedDriveY(camGx, camGz);
+
+            driveCamera.position.set(camX, Math.max(wy + camHeight, camTerrainY + 0.65), camZ);
+
+            const lookAheadDist = 7.5;
+            const lookX = wx - Math.sin(roverState.heading) * lookAheadDist;
+            const lookZ = wz - Math.cos(roverState.heading) * lookAheadDist;
+            driveCamera.lookAt(lookX, wy + 0.45, lookZ);
+
+            updateDirectionalARHazards();
+
+            const ix = Math.max(0, Math.min(69, Math.round(roverState.gx)));
+            const iz = Math.max(0, Math.min(69, Math.round(roverState.gz)));
+
+            // Live Dynamic A* Rerouting: check minimum distance from rover to activePath
+            if (hasDeployedOnce && !isArriving && activePath.length >= 2) {
+                let minPathDist = Infinity;
+                let closestIdx = 0;
+                for (let i = 0; i < activePath.length; i++) {
+                    const d = Math.hypot(activePath[i].x - roverState.gx, activePath[i].z - roverState.gz);
+                    if (d < minPathDist) {
+                        minPathDist = d;
+                        closestIdx = i;
+                    }
+                }
+
+                const navStatusEl = document.getElementById("drive-nav-status");
+                // If rover deviated > 0.85 grid units off-course OR advanced along the path to a new grid cell
+                if (minPathDist > 0.85 || (ix !== lastRoutedCell.x || iz !== lastRoutedCell.z)) {
+                    const isOffCourse = minPathDist > 1.15;
+                    recomputeDriveRoute(true);
+                    if (navStatusEl) {
+                        if (isOffCourse) {
+                            navStatusEl.innerText = "⚡ REROUTING A* FROM LIVE POS...";
+                            navStatusEl.style.color = "var(--amber)";
+                        } else {
+                            navStatusEl.innerText = "LOCKED ON OPTIMAL A*";
+                            navStatusEl.style.color = "var(--green)";
+                        }
+                    }
+                }
+            }
+
+            const cell = terrainData[iz][ix];
+            const haz = evaluateCellHazard(cell);
+
+            const deg = ((Math.round((-roverState.heading * 180) / Math.PI) % 360) + 360) % 360;
+            const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+            const dirStr = dirs[Math.round(deg / 45) % 8];
+            document.getElementById("drive-heading").innerText = `${deg}° ${dirStr}`;
+
+            const ll = gridToLatLon(roverState.gx, roverState.gz);
+            document.getElementById("drive-coords").innerText = `${ll.lat}°S, ${ll.lon}°E (${Math.round(cell.elevation)}m)`;
+
+            const distToGoal = Math.hypot(currentGoalNode.x - roverState.gx, currentGoalNode.z - roverState.gz);
+            document.getElementById("drive-target-dist").innerText = distToGoal < 0.75 ? "ARRIVED AT TARGET!" : `${distToGoal.toFixed(1)} km`;
+            document.getElementById("drive-speed").innerText = `${(Math.abs(roverState.speed) * 950).toFixed(1)} km/h`;
+
+            // Feature 2: Automatically end traverse and return to 2D Selection Screen upon reaching Destination!
+            if (distToGoal < 0.75 && !isArriving && document.getElementById("map-planner-overlay").style.display === "none") {
+                isArriving = true;
+                roverState.speed = 0;
+                roverState.keys = { w: false, a: false, s: false, d: false };
+                ["w", "a", "s", "d"].forEach(k => document.getElementById("key-" + k).classList.remove("pressed"));
+
+                const banner = document.getElementById("mission-complete-banner");
+                document.getElementById("arrival-subtitle").innerText =
+                    `Successfully arrived at ${currentGoalNode.name}. Returning to 2D Mission Planner...`;
+                banner.style.display = "block";
+
+                setTimeout(() => {
+                    banner.style.display = "none";
+                    open2DMapPlanner();
+                }, 2200);
+            }
+
+            const riskScore = Math.round(haz.total);
+            let riskLevel = "LOW", riskColor = "var(--green)";
+            if (riskScore >= 65) { riskLevel = "CRITICAL"; riskColor = "var(--red)"; }
+            else if (riskScore >= 42) { riskLevel = "HIGH"; riskColor = "var(--amber)"; }
+            else if (riskScore >= 25) { riskLevel = "MODERATE"; riskColor = "#ffea00"; }
+
+            const badge = document.getElementById("drive-danger-badge");
+            badge.innerText = `${riskLevel} (${riskScore}%)`;
+            badge.style.color = riskColor;
+            document.getElementById("drive-left-hud").style.borderColor = riskColor;
+
+            const unitNames = {
+                Hl: "Hl (Hesperian Paleolake Mudstone)",
+                Ahd: "Ahd (Amazonian Bagnold Dune Sand)",
+                Htu: "Htu (Hesperian Mt. Sharp Boxwork/Sulfate)",
+                Nh: "Nh (Noachian Crater Rim Wall)"
+            };
+            document.getElementById("drive-terrain-unit").innerText = `USGS Unit: ${unitNames[cell.geoUnit] || cell.geoUnit}`;
+
+            document.getElementById("drive-slope-val").innerText = `${cell.slope.toFixed(1)}°`;
+            document.getElementById("drive-bar-slope").style.width = `${Math.min(100, (cell.slope / 30) * 100)}%`;
+            document.getElementById("drive-bar-slope").style.background = cell.slope > 16 ? "var(--red)" : "var(--cyan)";
+
+            document.getElementById("drive-ti-val").innerText = `${Math.round(cell.thermal)} TI`;
+            document.getElementById("drive-bar-ti").style.width = `${Math.round(haz.sandRisk)}%`;
+            document.getElementById("drive-bar-ti").style.background = cell.thermal < 175 ? "var(--red)" : "var(--green)";
+
+            document.getElementById("drive-dci-val").innerText = `${cell.dustIndex.toFixed(2)} DCI`;
+            document.getElementById("drive-bar-dci").style.width = `${Math.round(cell.dustIndex * 100)}%`;
+
+            document.getElementById("drive-rad-val").innerText = `${haz.radDoseRate.toFixed(3)} mSv/h`;
+            document.getElementById("drive-bar-rad").style.width = `${Math.round(haz.radRisk)}%`;
+
+            const rSlope = document.getElementById("reason-slope");
+            if (cell.slope > 16) {
+                rSlope.style.borderColor = "var(--red)";
+                rSlope.innerHTML = `<b>⚠️ 1. Steep Slope Hazard (${cell.slope.toFixed(1)}°):</b> Exceeds 16° JPL rover rollover &amp; wheel-slip safety limit (AI4Mars: ${cell.ai4marsClass}).`;
+            } else {
+                rSlope.style.borderColor = "var(--green)";
+                rSlope.innerHTML = `<b>✅ 1. Slope Stability (${cell.slope.toFixed(1)}°):</b> Safe grade on MOLA PIA02820 DEM (AI4Mars class: ${cell.ai4marsClass}).`;
+            }
+
+            const rSand = document.getElementById("reason-sand");
+            if (cell.thermal < 180) {
+                rSand.style.borderColor = "var(--red)";
+                rSand.innerHTML = `<b>⚠️ 2. Sand Trap Alert (${Math.round(cell.thermal)} TI):</b> MGS TES (Putzig 2005) detects unconsolidated Bagnold Dune sand — high wheel sinkage risk!`;
+            } else {
+                rSand.style.borderColor = "var(--green)";
+                rSand.innerHTML = `<b>✅ 2. Bedrock Traction (${Math.round(cell.thermal)} TI):</b> High thermal inertia confirms cemented rock/soil with strong traction.`;
+            }
+
+            const rDust = document.getElementById("reason-dust");
+            if (cell.dustIndex > 0.60) {
+                rDust.style.borderColor = "var(--amber)";
+                rDust.innerHTML = `<b>⚠️ 3. High Dust Cover (DCI ${cell.dustIndex.toFixed(2)}):</b> Ruff &amp; Christensen (2002) TES index warns of thick obscuring dust &amp; solar loss.`;
+            } else {
+                rDust.style.borderColor = "var(--cyan)";
+                rDust.innerHTML = `<b>✅ 3. Low Dust Cover (DCI ${cell.dustIndex.toFixed(2)}):</b> Wind-scoured surface; optimal optical visibility &amp; solar array power.`;
+            }
+
+            const rRad = document.getElementById("reason-rad");
+            if (cell.elevation > -2200) {
+                rRad.style.borderColor = "var(--amber)";
+                rRad.innerHTML = `<b>⚠️ 4. High-Altitude Radiation (${haz.radDoseRate.toFixed(3)} mSv/h):</b> Thinner atmospheric shielding on upper Mount Sharp (${Math.round(cell.elevation)}m).`;
+            } else {
+                rRad.style.borderColor = "var(--cyan)";
+                rRad.innerHTML = `<b>✅ 4. Atmospheric Shielding (${haz.radDoseRate.toFixed(3)} mSv/h):</b> Deep crater floor (${Math.round(cell.elevation)}m) shields against GCR/SPE.`;
+            }
+
+            render2DMapToCanvas(document.getElementById("minimap-canvas"), false);
+        }
+
+        function onDriveResize() {
+            if (!driveRenderer || !driveCamera) return;
+            const container = document.getElementById("drive-canvas-container");
+            if (container.clientWidth === 0 || container.clientHeight === 0) return;
+            driveCamera.aspect = container.clientWidth / container.clientHeight;
+            driveCamera.updateProjectionMatrix();
+            driveRenderer.setSize(container.clientWidth, container.clientHeight);
+            updateDirectionalARHazards();
+        }
+
+        function animateDriveLoop() {
+            requestAnimationFrame(animateDriveLoop);
+            if (currentAppMode !== "drive" || !driveRenderer || !driveScene || !driveCamera) return;
+
+            // Calibrated Rover Speed for Expanded 560x560 3D World (~0.024 grid/frame = realistic traverse pace!)
+            const maxSpeed = 0.024;
+            const accel = 0.0014;
+            const turnSpeed = 0.030;
+
+            if (roverState.keys.w) roverState.speed = Math.min(maxSpeed, roverState.speed + accel);
+            else if (roverState.keys.s) roverState.speed = Math.max(-maxSpeed * 0.65, roverState.speed - accel);
+            else roverState.speed *= 0.88;
+
+            if (roverState.keys.a) roverState.heading += turnSpeed;
+            if (roverState.keys.d) roverState.heading -= turnSpeed;
+
+            if (Math.abs(roverState.speed) > 0.0002 || roverState.keys.a || roverState.keys.d) {
+                roverState.gx = Math.max(1, Math.min(GRID_SIZE - 2, roverState.gx - Math.sin(roverState.heading) * roverState.speed));
+                roverState.gz = Math.max(1, Math.min(GRID_SIZE - 2, roverState.gz - Math.cos(roverState.heading) * roverState.speed));
+
+                wheelMeshes.forEach(w => { w.rotation.x -= roverState.speed * 14.0; });
+                updateRover3DTransformAndHUD();
+            }
+
+            driveRenderer.render(driveScene, driveCamera);
+        }
+    </script>
 </body>
 </html>
